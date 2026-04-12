@@ -160,36 +160,48 @@ function SharedBlock({
           const entityTitle = titleMap.get(r.entity_id) || "Untitled";
           const creator = profileMap.get(r.created_by);
           const perm = PERMISSION_META[r.permission] ?? PERMISSION_META.view;
-          const appUrl = ENTITY_APP_URL[entityType]?.(r.entity_id);
+          const appUrl = ENTITY_APP_URL[entityType]?.(r.entity_id) ?? `/shared/${r.token}`;
           const expired = r.expires_at ? new Date(r.expires_at) < new Date() : false;
           return (
-            <li key={r.id} className="flex items-center gap-3 py-2.5">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  {appUrl ? (
-                    <Link href={appUrl} className="truncate text-sm font-medium text-zinc-900 hover:text-indigo-600 dark:text-zinc-100 dark:hover:text-indigo-400">
-                      {entityTitle}
-                    </Link>
+            <li key={r.id} className="group relative -mx-2 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
+              <Link
+                href={appUrl}
+                className="flex items-center gap-3 px-2 py-2.5"
+                aria-label={`Open ${entityTitle}`}
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400">
+                  {creator && creator.avatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={creator.avatar} alt={creator.name} className="h-8 w-8 rounded-lg object-cover" />
                   ) : (
-                    <span className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">{entityTitle}</span>
-                  )}
-                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${perm.color}`}>
-                    {perm.icon}
-                    {perm.label}
-                  </span>
-                  {expired && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
-                      <Clock className="h-3 w-3" /> Expired
-                    </span>
+                    <span className="text-xs font-bold">{(creator?.name ?? entityTitle).charAt(0).toUpperCase()}</span>
                   )}
                 </div>
-                <p className="mt-0.5 truncate text-[11px] text-zinc-500 dark:text-zinc-400">
-                  {showCreator && creator && <>by {creator.name} · </>}
-                  {formatDistanceToNow(new Date(r.created_at), { addSuffix: true })}
-                  {r.expires_at && !expired && <> · expires {formatDistanceToNow(new Date(r.expires_at), { addSuffix: true })}</>}
-                </p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate text-sm font-medium text-zinc-900 group-hover:text-indigo-600 dark:text-zinc-100 dark:group-hover:text-indigo-400">
+                      {entityTitle}
+                    </span>
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${perm.color}`}>
+                      {perm.icon}
+                      {perm.label}
+                    </span>
+                    {expired && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                        <Clock className="h-3 w-3" /> Expired
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 truncate text-[11px] text-zinc-500 dark:text-zinc-400">
+                    {showCreator && creator && <>by {creator.name} · </>}
+                    {formatDistanceToNow(new Date(r.created_at), { addSuffix: true })}
+                    {r.expires_at && !expired && <> · expires {formatDistanceToNow(new Date(r.expires_at), { addSuffix: true })}</>}
+                  </p>
+                </div>
+              </Link>
+              <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                <CopyLinkButton token={r.token} />
               </div>
-              <CopyLinkButton token={r.token} />
             </li>
           );
         })}

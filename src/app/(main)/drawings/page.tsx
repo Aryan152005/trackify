@@ -69,6 +69,8 @@ export default async function DrawingsPage() {
           }
         />
 
+        <SharedSection entityType="drawing" />
+
         {/* Drawings grid */}
         {drawings && drawings.length > 0 ? (
           <AnimatedList>
@@ -113,8 +115,6 @@ export default async function DrawingsPage() {
             </form>
           </EmptyState>
         )}
-
-        <SharedSection entityType="drawing" />
       </div>
     </AnimatedPage>
   );
