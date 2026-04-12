@@ -10,8 +10,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const STORAGE_KEY = "trackify-welcome-tour-done";
-
 interface Step {
   icon: React.ComponentType<{ className?: string }>;
   gradient: string;
@@ -127,19 +125,18 @@ export function WelcomeTour() {
 
   useEffect(() => {
     setMounted(true);
-    // Auto-open for new users; also support ?tour=1 for re-opening
+    // Only auto-open when the onboarding flow explicitly requests the tour via
+    // ?tour=1. This is set after a fresh signup completes. Tour is NOT shown
+    // on subsequent logins or on new devices — users can always restart it
+    // manually from the Help page.
     const params = new URLSearchParams(window.location.search);
-    const force = params.get("tour") === "1";
-    if (force) {
+    if (params.get("tour") === "1") {
       setOpen(true);
-      return;
-    }
-    try {
-      if (!localStorage.getItem(STORAGE_KEY)) {
-        setOpen(true);
-      }
-    } catch {
-      /* ignore */
+      // Strip the query param so a refresh doesn't reopen it
+      params.delete("tour");
+      const qs = params.toString();
+      const newUrl = window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash;
+      window.history.replaceState({}, "", newUrl);
     }
   }, []);
 
@@ -153,16 +150,7 @@ export function WelcomeTour() {
     return () => window.removeEventListener("trackify:open-tour", onEvt);
   }, []);
 
-  function markDone() {
-    try {
-      localStorage.setItem(STORAGE_KEY, new Date().toISOString());
-    } catch {
-      /* ignore */
-    }
-  }
-
   function close() {
-    markDone();
     setOpen(false);
   }
 

@@ -181,10 +181,10 @@ export default function OnboardingPage() {
           <div className="mt-8 text-center">
             <Button
               size="lg"
-              onClick={() => router.push("/dashboard")}
+              onClick={() => router.push("/dashboard?tour=1")}
               className="gap-2 px-8"
             >
-              Go to Dashboard
+              Start the tour
               <ArrowRight className="h-4 w-4" />
             </Button>
             <p className="mt-3 text-xs text-zinc-400">
