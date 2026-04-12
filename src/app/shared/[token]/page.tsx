@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Globe, Lock, FileText, ClipboardList, Columns, BookOpen, Pencil as DrawIcon, Brain, Target } from "lucide-react";
 import { BlockNoteReadOnly } from "@/components/shared/blocknote-readonly";
 import { createClient } from "@/lib/supabase/client";
@@ -229,6 +229,7 @@ function SharedPageContent({ entity, entityType }: { entity: Record<string, unkn
 
 export default function SharedTokenPage() {
   const params = useParams<{ token: string }>();
+  const router = useRouter();
   const [data, setData] = useState<SharedData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -266,7 +267,16 @@ export default function SharedTokenPage() {
                 .eq("workspace_id", json.workspaceId)
                 .eq("user_id", user.id)
                 .maybeSingle();
-              if (membership) setCanEditInApp(true);
+              if (membership) {
+                setCanEditInApp(true);
+                // Auto-redirect workspace members straight to the full in-app view
+                // (they'd otherwise see the read-only preview unnecessarily).
+                const appUrl = ENTITY_APP_URL[json.entityType]?.((json.entity?.id as string) || "");
+                if (appUrl) {
+                  router.replace(appUrl);
+                  return;
+                }
+              }
             }
           } catch {
             /* ignore — fall back to read-only view */

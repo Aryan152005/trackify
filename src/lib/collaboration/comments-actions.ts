@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { fetchProfileMap } from "./profile-helper";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -42,13 +43,7 @@ export async function getComments(
 
   const { data: comments, error } = await supabase
     .from("comments")
-    .select(
-      `
-      *,
-      user_profiles!comments_user_id_fkey(name, avatar_url),
-      replies:comments!parent_comment_id(count)
-    `
-    )
+    .select(`*, replies:comments!parent_comment_id(count)`)
     .eq("workspace_id", workspaceId)
     .eq("entity_type", entityType)
     .eq("entity_id", entityId)
@@ -56,7 +51,11 @@ export async function getComments(
     .order("created_at", { ascending: true });
 
   if (error) throw new Error(`Failed to fetch comments: ${error.message}`);
-  return comments;
+  const profileMap = await fetchProfileMap(supabase, (comments ?? []).map((c) => c.user_id as string));
+  return (comments ?? []).map((c) => ({
+    ...c,
+    user_profiles: profileMap.get(c.user_id as string) ?? null,
+  }));
 }
 
 export async function addComment(
@@ -78,15 +77,12 @@ export async function addComment(
       content,
       parent_comment_id: parentCommentId ?? null,
     })
-    .select(
-      `
-      *,
-      user_profiles!comments_user_id_fkey(name, avatar_url)
-    `
-    )
+    .select("*")
     .single();
 
   if (error) throw new Error(`Failed to add comment: ${error.message}`);
+  const profileMap = await fetchProfileMap(supabase, [comment.user_id as string]);
+  (comment as Record<string, unknown>).user_profiles = profileMap.get(comment.user_id as string) ?? null;
 
   // Parse @mentions and create mention records + notifications
   const mentions = parseMentions(content);

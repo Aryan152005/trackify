@@ -93,31 +93,27 @@ export async function markAllMentionsSeen(
 export async function searchUsers(workspaceId: string, query: string) {
   const { supabase } = await getAuthenticatedUser();
 
-  // Find workspace members whose profile name matches the query
+  // Two-step lookup because workspace_members.user_id → auth.users, not user_profiles,
+  // so PostgREST embedding via FK hint fails with 400.
   const { data: members, error } = await supabase
     .from("workspace_members")
-    .select(
-      `
-      user_id,
-      user_profiles!workspace_members_user_id_fkey(name, avatar_url)
-    `
-    )
+    .select("user_id")
     .eq("workspace_id", workspaceId);
 
   if (error) throw new Error(`Failed to search users: ${error.message}`);
 
-  // Filter by query on the client side since we need to match on the joined profile name
-  const lowerQuery = query.toLowerCase();
-  const results = (members ?? [])
-    .filter((m: any) => {
-      const name = m.user_profiles?.name;
-      return name && name.toLowerCase().includes(lowerQuery);
-    })
-    .map((m: any) => ({
-      id: m.user_id,
-      name: m.user_profiles?.name ?? "",
-      avatar_url: m.user_profiles?.avatar_url ?? null,
-    }));
+  const userIds = (members ?? []).map((m) => m.user_id as string);
+  if (userIds.length === 0) return [];
 
-  return results;
+  const { data: profiles } = await supabase
+    .from("user_profiles")
+    .select("user_id, name, avatar_url")
+    .in("user_id", userIds)
+    .ilike("name", `%${query}%`);
+
+  return (profiles ?? []).map((p) => ({
+    id: p.user_id as string,
+    name: (p.name as string) ?? "",
+    avatar_url: (p.avatar_url as string) ?? null,
+  }));
 }

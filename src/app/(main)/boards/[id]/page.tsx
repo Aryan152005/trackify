@@ -102,7 +102,7 @@ export default function BoardDetailPage() {
       supabase
         .from("tasks")
         .select(
-          "id, title, description, status, priority, due_date, assigned_to, labels, position, column_id, user_profiles!tasks_assigned_to_fkey(name, avatar_url)"
+          "id, title, description, status, priority, due_date, assigned_to, labels, position, column_id"
         )
         .eq("board_id", boardId)
         .order("position"),
@@ -115,13 +115,26 @@ export default function BoardDetailPage() {
 
     setBoard(boardRes.data as Board);
 
+    // Fetch assignee profiles in a second query (FK is on auth.users, not user_profiles)
+    const rawTasksInit = (tasksRes.data ?? []) as Array<Record<string, unknown>>;
+    const assigneeIds = [...new Set(rawTasksInit.map((t) => t.assigned_to).filter(Boolean))] as string[];
+    const profileMap = new Map<string, { name: string; avatar_url: string | null }>();
+    if (assigneeIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from("user_profiles")
+        .select("user_id, name, avatar_url")
+        .in("user_id", assigneeIds);
+      for (const p of profiles ?? []) {
+        profileMap.set(p.user_id as string, {
+          name: (p.name as string) ?? "",
+          avatar_url: (p.avatar_url as string) ?? null,
+        });
+      }
+    }
+
     // Build a map of tasks per column
     const tasksByColumn = new Map<string, TaskCard[]>();
-    const rawTasks = (tasksRes.data ?? []) as unknown as Array<
-      Record<string, unknown> & {
-        user_profiles?: { name: string; avatar_url: string | null } | null;
-      }
-    >;
+    const rawTasks = rawTasksInit as Array<Record<string, unknown>>;
 
     for (const t of rawTasks) {
       const colId = t.column_id as string | null;
@@ -138,7 +151,7 @@ export default function BoardDetailPage() {
         labels: (t.labels as TaskCard["labels"]) ?? [],
         position: t.position as number,
         column_id: colId,
-        assigned_profile: t.user_profiles ?? null,
+        assigned_profile: t.assigned_to ? profileMap.get(t.assigned_to as string) ?? null : null,
       };
 
       if (!tasksByColumn.has(colId)) tasksByColumn.set(colId, []);
@@ -159,29 +172,27 @@ export default function BoardDetailPage() {
   const fetchMembers = useCallback(async () => {
     if (!workspaceId) return;
     const supabase = createClient();
-    const { data } = await supabase
+    const { data: memberRows } = await supabase
       .from("workspace_members")
-      .select("user_id, user_profiles!workspace_members_user_id_fkey(name, avatar_url)")
+      .select("user_id")
       .eq("workspace_id", workspaceId);
 
-    if (data) {
-      const mapped = data
-        .map((m: Record<string, unknown>) => {
-          const profile = m.user_profiles as {
-            name: string;
-            avatar_url: string | null;
-          } | null;
-          return profile
-            ? {
-                id: m.user_id as string,
-                name: profile.name,
-                avatar_url: profile.avatar_url,
-              }
-            : null;
-        })
-        .filter(Boolean) as { id: string; name: string; avatar_url: string | null }[];
-      setMembers(mapped);
+    const userIds = (memberRows ?? []).map((m) => m.user_id as string);
+    if (userIds.length === 0) {
+      setMembers([]);
+      return;
     }
+    const { data: profiles } = await supabase
+      .from("user_profiles")
+      .select("user_id, name, avatar_url")
+      .in("user_id", userIds);
+
+    const mapped = (profiles ?? []).map((p) => ({
+      id: p.user_id as string,
+      name: (p.name as string) ?? "",
+      avatar_url: (p.avatar_url as string) ?? null,
+    }));
+    setMembers(mapped);
   }, [workspaceId]);
 
   useEffect(() => {
