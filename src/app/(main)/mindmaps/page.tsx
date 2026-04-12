@@ -11,7 +11,7 @@ import {
   AnimatedList,
   AnimatedItem,
 } from "@/components/ui/animated-layout";
-import { Plus, Brain } from "lucide-react";
+import { Plus, Brain, Sparkles } from "lucide-react";
 import { createMindMap } from "@/lib/mindmaps/actions";
 
 export default async function MindMapsPage() {
@@ -58,12 +58,20 @@ export default async function MindMapsPage() {
           title="Mind Maps"
           description="Visual brainstorming and idea organization"
           actions={
-            <form action={handleCreate}>
-              <Button type="submit">
-                <Plus className="mr-2 h-4 w-4" />
-                New Mind Map
-              </Button>
-            </form>
+            <>
+              <Link href="/mindmaps/smart">
+                <Button variant="outline">
+                  <Sparkles className="mr-2 h-4 w-4 text-indigo-500" />
+                  Smart Mindmap
+                </Button>
+              </Link>
+              <form action={handleCreate}>
+                <Button type="submit">
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Mind Map
+                </Button>
+              </form>
+            </>
           }
         />
 
