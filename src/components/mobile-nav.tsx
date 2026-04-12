@@ -25,6 +25,7 @@ import {
   HelpCircle,
   Star,
   Flame,
+  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
@@ -81,9 +82,15 @@ const navSections = [
   },
 ];
 
-export function MobileNav() {
+export function MobileNav({ isAdmin = false }: { isAdmin?: boolean }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const sections = isAdmin
+    ? [...navSections, {
+        label: "Admin",
+        items: [{ href: "/admin", label: "Admin Dashboard", icon: Shield }],
+      }]
+    : navSections;
 
   const close = useCallback(() => setOpen(false), []);
 
@@ -156,7 +163,7 @@ export function MobileNav() {
         </div>
 
         <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
-          {navSections.map((section, si) => (
+          {sections.map((section, si) => (
             <div key={si} className={cn(si > 0 && "mt-4")}>
               {section.label && (
                 <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">

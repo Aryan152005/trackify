@@ -30,6 +30,7 @@ import {
   Settings,
   HelpCircle,
   Star,
+  Shield,
 } from "lucide-react";
 
 const CommandPalette = dynamic(
@@ -61,9 +62,12 @@ const moreNav = [
 
 export const navItems = primaryNav;
 
-export function AppNav() {
+export function AppNav({ isAdmin = false }: { isAdmin?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
+  const moreNavWithAdmin = isAdmin
+    ? [{ href: "/admin", label: "Admin", icon: Shield }, ...moreNav]
+    : moreNav;
 
   async function handleSignOut() {
     const supabase = createClient();
@@ -72,7 +76,7 @@ export function AppNav() {
     router.refresh();
   }
 
-  const isMoreActive = moreNav.some(
+  const isMoreActive = moreNavWithAdmin.some(
     (item) => pathname === item.href || pathname.startsWith(item.href + "/")
   );
 
@@ -81,7 +85,7 @@ export function AppNav() {
       <div className="flex h-14 w-full items-center gap-2 px-3 sm:gap-3 sm:px-4 lg:px-6">
         {/* Left: hamburger (mobile) + logo + workspace (desktop) */}
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-          <MobileNav />
+          <MobileNav isAdmin={isAdmin} />
           <Link href="/dashboard" className="flex shrink-0 items-center gap-2 text-lg font-bold text-indigo-600 dark:text-indigo-400">
             Trackify
           </Link>
@@ -134,7 +138,7 @@ export function AppNav() {
                 sideOffset={6}
                 className="z-50 w-52 rounded-xl border border-zinc-200 bg-white py-1.5 shadow-lg outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 dark:border-zinc-700 dark:bg-zinc-900"
               >
-                {moreNav.map(({ href, label, icon: Icon }) => {
+                {moreNavWithAdmin.map(({ href, label, icon: Icon }) => {
                   const active = pathname === href || pathname.startsWith(href + "/");
                   return (
                     <DropdownMenu.Item key={href} asChild>

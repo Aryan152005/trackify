@@ -13,6 +13,13 @@ export async function requireAdmin() {
   return user;
 }
 
+/** Non-throwing variant used by the nav to decide whether to render the admin button. */
+export async function isCurrentUserAdmin(): Promise<boolean> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  return !!user && user.email === ADMIN_EMAIL;
+}
+
 // ---------------------------------------------------------------------------
 // Platform-wide metrics
 // ---------------------------------------------------------------------------
