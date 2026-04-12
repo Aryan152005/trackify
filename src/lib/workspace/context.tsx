@@ -27,6 +27,13 @@ export const WorkspaceContext = createContext<WorkspaceContextValue>({
 });
 
 const STORAGE_KEY = "wis-active-workspace";
+const COOKIE_KEY = "wis_active_workspace";
+
+function writeWorkspaceCookie(id: string) {
+  if (typeof document === "undefined") return;
+  // 1-year cookie, Lax so it travels with the next reload.
+  document.cookie = `${COOKIE_KEY}=${id}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
+}
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -69,6 +76,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         : null;
     const active = ws.find((w) => w.id === savedId) || ws[0];
 
+    // Keep the cookie in sync so server components honor the same selection.
+    writeWorkspaceCookie(active.id);
+
     setWorkspace(active);
     setRole(
       memberships.find(
@@ -88,6 +98,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (ws) {
         setWorkspace(ws);
         localStorage.setItem(STORAGE_KEY, workspaceId);
+        writeWorkspaceCookie(workspaceId);
         // Reload to refresh server-rendered data
         window.location.reload();
       }

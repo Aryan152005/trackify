@@ -38,6 +38,7 @@ import {
   Shield,
   Users,
   Target,
+  Activity,
 } from "lucide-react";
 
 const CommandPalette = dynamic(
@@ -64,6 +65,7 @@ const moreNav = [
   { href: "/challenges", label: "Challenges", icon: Target },
   { href: "/requests", label: "Requests", icon: MessageSquare },
   { href: "/workspace/members", label: "Team Members", icon: Users },
+  { href: "/workspace/activity", label: "Workspace Activity", icon: Activity },
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/help", label: "Help & Guide", icon: HelpCircle },
   { href: "/feedback", label: "Feedback", icon: Star },

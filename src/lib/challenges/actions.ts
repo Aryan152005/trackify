@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { logActivity } from "@/lib/activity/actions";
 import type {
   Challenge, ChallengeDay, ChallengeMode, HabitDay, KanbanDay, RoadmapDay,
 } from "./types";
@@ -44,6 +45,13 @@ export async function createChallenge(args: {
     .select()
     .single();
   if (error) throw new Error(error.message);
+  await logActivity({
+    workspaceId: args.workspaceId ?? null,
+    action: "created",
+    entityType: "challenge",
+    entityId: (data as Challenge).id,
+    entityTitle: (data as Challenge).title,
+  });
   revalidatePath("/challenges");
   return data as Challenge;
 }
@@ -93,8 +101,22 @@ export async function archiveChallenge(id: string) {
 
 export async function deleteChallenge(id: string) {
   const { supabase } = await requireUser();
+  const { data: existing } = await supabase
+    .from("challenges")
+    .select("workspace_id, title")
+    .eq("id", id)
+    .maybeSingle();
   const { error } = await supabase.from("challenges").delete().eq("id", id);
   if (error) throw new Error(error.message);
+  if (existing) {
+    await logActivity({
+      workspaceId: (existing.workspace_id as string) ?? null,
+      action: "deleted",
+      entityType: "challenge",
+      entityId: id,
+      entityTitle: (existing.title as string) ?? "Untitled",
+    });
+  }
   revalidatePath("/challenges");
 }
 

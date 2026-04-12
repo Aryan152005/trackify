@@ -292,8 +292,22 @@ export async function getActiveWorkspaceId(): Promise<string | null> {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  // For server components, we get the first workspace the user is a member of
-  // The client-side context handles the active workspace selection
+  // Prefer the workspace the user actively selected (mirrored into a cookie
+  // by WorkspaceProvider). Verify membership so a stale cookie can't leak data.
+  const { cookies } = await import("next/headers");
+  const jar = await cookies();
+  const cookieId = jar.get("wis_active_workspace")?.value;
+  if (cookieId) {
+    const { data: ok } = await supabase
+      .from("workspace_members")
+      .select("workspace_id")
+      .eq("workspace_id", cookieId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (ok?.workspace_id) return ok.workspace_id as string;
+  }
+
+  // Fallback: first-joined workspace.
   const { data: membership } = await supabase
     .from("workspace_members")
     .select("workspace_id, workspaces(is_personal)")
