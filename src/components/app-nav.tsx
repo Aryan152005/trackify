@@ -37,6 +37,7 @@ import {
   Star,
   Shield,
   Users,
+  Target,
 } from "lucide-react";
 
 const CommandPalette = dynamic(
@@ -60,6 +61,7 @@ const moreNav = [
   { href: "/timeline", label: "Timeline", icon: Clock },
   { href: "/reminders", label: "Reminders", icon: Bell },
   { href: "/drawings", label: "Drawings", icon: Pencil },
+  { href: "/challenges", label: "Challenges", icon: Target },
   { href: "/requests", label: "Requests", icon: MessageSquare },
   { href: "/workspace/members", label: "Team Members", icon: Users },
   { href: "/settings", label: "Settings", icon: Settings },

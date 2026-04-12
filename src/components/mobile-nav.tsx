@@ -29,6 +29,7 @@ import {
   Star,
   Flame,
   Shield,
+  Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
@@ -57,6 +58,7 @@ const navSections = [
       { href: "/calendar", label: "Calendar", icon: Calendar },
       { href: "/reminders", label: "Reminders", icon: Bell },
       { href: "/timeline", label: "Timeline", icon: Clock },
+      { href: "/challenges", label: "Challenges", icon: Target },
     ],
   },
   {
