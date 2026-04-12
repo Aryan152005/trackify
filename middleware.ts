@@ -44,7 +44,12 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname === "/" ||
     request.nextUrl.pathname.startsWith("/auth") ||
     request.nextUrl.pathname === "/onboarding" ||
-    request.nextUrl.pathname.startsWith("/api/workspace/invite");
+    request.nextUrl.pathname.startsWith("/api/workspace/invite") ||
+    // Shareable links — must work for anonymous viewers
+    request.nextUrl.pathname.startsWith("/shared") ||
+    request.nextUrl.pathname.startsWith("/api/collaboration/share") ||
+    // Public request-access form
+    request.nextUrl.pathname === "/request-access";
 
   if (!user && !isAuthRoute && !isPublicRoute) {
     const redirectUrl = request.nextUrl.clone();
