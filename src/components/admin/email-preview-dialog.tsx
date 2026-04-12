@@ -36,7 +36,7 @@ function htmlToText(html: string): string {
 }
 
 export function EmailPreviewDialog({ open, onOpenChange, payload }: Props) {
-  const [copied, setCopied] = useState<"html" | "text" | "to" | null>(null);
+  const [copied, setCopied] = useState<"html" | "text" | "to" | "subject" | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
 
   if (!payload) return null;
@@ -46,9 +46,13 @@ export function EmailPreviewDialog({ open, onOpenChange, payload }: Props) {
     payload.subject
   )}&body=${encodeURIComponent(text)}`;
 
-  async function copy(kind: "html" | "text" | "to") {
+  async function copy(kind: "html" | "text" | "to" | "subject") {
     try {
-      const val = kind === "html" ? payload!.html : kind === "text" ? text : payload!.to;
+      const val =
+        kind === "html" ? payload!.html
+        : kind === "text" ? text
+        : kind === "to" ? payload!.to
+        : payload!.subject;
       await navigator.clipboard.writeText(val);
       setCopied(kind);
       setCopyError(null);
@@ -72,7 +76,7 @@ export function EmailPreviewDialog({ open, onOpenChange, payload }: Props) {
                 Email preview — copy &amp; send manually
               </Dialog.Title>
               <Dialog.Description className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                <span className="font-medium">Subject:</span> {payload.subject}
+                Copy any field below, or open in your mail app to send.
               </Dialog.Description>
             </div>
             <Dialog.Close asChild>
@@ -83,17 +87,20 @@ export function EmailPreviewDialog({ open, onOpenChange, payload }: Props) {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 sm:p-5">
-            <div className="mb-3 flex items-center gap-2 rounded-lg bg-zinc-50 px-3 py-2 text-sm dark:bg-zinc-800/50">
-              <span className="text-zinc-500 dark:text-zinc-400">To:</span>
-              <span className="flex-1 truncate font-mono text-zinc-800 dark:text-zinc-200">{payload.to}</span>
-              <button
-                type="button"
-                onClick={() => copy("to")}
-                className="rounded p-1 text-zinc-500 transition hover:bg-zinc-200 hover:text-zinc-900 dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
-                aria-label="Copy recipient"
-              >
-                {copied === "to" ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
-              </button>
+            <div className="mb-3 space-y-1.5">
+              <FieldRow
+                label="To"
+                value={payload.to}
+                mono
+                copied={copied === "to"}
+                onCopy={() => copy("to")}
+              />
+              <FieldRow
+                label="Subject"
+                value={payload.subject}
+                copied={copied === "subject"}
+                onCopy={() => copy("subject")}
+              />
             </div>
 
             <div className="overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/50">
@@ -136,5 +143,35 @@ export function EmailPreviewDialog({ open, onOpenChange, payload }: Props) {
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+function FieldRow({
+  label, value, mono, copied, onCopy,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  copied: boolean;
+  onCopy: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 rounded-lg bg-zinc-50 px-3 py-2 text-sm dark:bg-zinc-800/50">
+      <span className="w-16 shrink-0 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+        {label}
+      </span>
+      <span className={`flex-1 truncate text-zinc-800 dark:text-zinc-200 ${mono ? "font-mono" : ""}`}>
+        {value}
+      </span>
+      <button
+        type="button"
+        onClick={onCopy}
+        className="flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs text-zinc-500 transition hover:bg-zinc-200 hover:text-zinc-900 dark:hover:bg-zinc-700 dark:hover:text-zinc-100"
+        aria-label={`Copy ${label.toLowerCase()}`}
+      >
+        {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+        {copied ? "Copied" : "Copy"}
+      </button>
+    </div>
   );
 }
