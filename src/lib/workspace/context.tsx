@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Workspace, WorkspaceRole } from "@/lib/types/workspace";
 
@@ -36,6 +37,7 @@ function writeWorkspaceCookie(id: string) {
 }
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [role, setRole] = useState<WorkspaceRole | null>(null);
@@ -97,13 +99,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const ws = workspaces.find((w) => w.id === workspaceId);
       if (ws) {
         setWorkspace(ws);
+        setRole((ws as Workspace & { _role?: WorkspaceRole })._role ?? null);
         localStorage.setItem(STORAGE_KEY, workspaceId);
         writeWorkspaceCookie(workspaceId);
-        // Reload to refresh server-rendered data
-        window.location.reload();
+        // Refresh server components (which read workspace from the cookie)
+        // without a full page reload — keeps scroll & client state intact.
+        router.refresh();
       }
     },
-    [workspaces]
+    [workspaces, router]
   );
 
   return (

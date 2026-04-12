@@ -1,27 +1,33 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { useWorkspace } from "@/lib/workspace/hooks";
 import { createWorkspace } from "@/lib/workspace/actions";
-import { ChevronDown, Plus, Building2 } from "lucide-react";
+import { ChevronDown, Plus, Building2, Loader2, Check } from "lucide-react";
 
 export function WorkspaceSwitcher() {
   const { workspace, workspaces, switchWorkspace } = useWorkspace();
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [newName, setNewName] = useState("");
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!newName.trim()) return;
+    if (!newName.trim() || busy) return;
+    setBusy(true);
     try {
       const ws = await createWorkspace(newName.trim());
+      toast.success(`Workspace "${ws.name}" created`);
       switchWorkspace(ws.id);
-    } catch {
-      // handle error silently
+      setCreating(false);
+      setNewName("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't create workspace");
+    } finally {
+      setBusy(false);
     }
-    setCreating(false);
-    setNewName("");
   }
 
   if (!workspace) return null;
@@ -30,10 +36,12 @@ export function WorkspaceSwitcher() {
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800 transition"
+        aria-label={`Current workspace: ${workspace.name}. Click to switch.`}
+        aria-expanded={open}
+        className="flex h-11 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800 transition"
       >
         <Building2 className="h-4 w-4 text-zinc-500" />
-        <span className="max-w-[120px] truncate">{workspace.name}</span>
+        <span className="max-w-[180px] truncate">{workspace.name}</span>
         <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
       </button>
 
@@ -51,16 +59,19 @@ export function WorkspaceSwitcher() {
                   switchWorkspace(ws.id);
                   setOpen(false);
                 }}
-                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition ${
+                className={`flex min-h-[40px] w-full items-center gap-2 rounded-md px-2 py-2 text-sm transition ${
                   ws.id === workspace.id
-                    ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50"
+                    ? "bg-indigo-50 text-indigo-900 dark:bg-indigo-950/30 dark:text-indigo-200"
                     : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 }`}
               >
                 <Building2 className="h-4 w-4 shrink-0 text-zinc-400" />
                 <span className="truncate">{ws.name}</span>
                 {ws.is_personal && (
-                  <span className="ml-auto text-xs text-zinc-400">Personal</span>
+                  <span className="ml-auto text-[10px] font-medium text-zinc-400">Personal</span>
+                )}
+                {ws.id === workspace.id && (
+                  <Check className="ml-auto h-3.5 w-3.5 text-indigo-500" />
                 )}
               </button>
             ))}
@@ -79,8 +90,10 @@ export function WorkspaceSwitcher() {
                 <div className="mt-2 flex gap-1">
                   <button
                     type="submit"
-                    className="rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-700"
+                    disabled={busy}
+                    className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
                   >
+                    {busy && <Loader2 className="h-3 w-3 animate-spin" />}
                     Create
                   </button>
                   <button

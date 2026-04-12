@@ -20,8 +20,9 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { EmailPreviewDialog } from "@/components/admin/email-preview-dialog";
 import type { RenderedEmail } from "@/lib/admin/preview-actions";
 import type { WorkspaceRole } from "@/lib/types/workspace";
-import { UserPlus, Shield, Trash2, Mail, Eye, RefreshCw, Copy, Check, Loader2 } from "lucide-react";
+import { UserPlus, Shield, Trash2, Mail, Eye, RefreshCw, Copy, Check, Loader2, Search } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { toast } from "sonner";
 
 interface MemberRow {
   id: string;
@@ -51,6 +52,7 @@ export default function WorkspaceMembersPage() {
   // Per-row action state
   const [actionId, setActionId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   const loadAll = useCallback(async () => {
     if (!workspace) return;
@@ -210,18 +212,30 @@ export default function WorkspaceMembersPage() {
   }
 
   async function handleRoleChange(memberId: string, role: "admin" | "editor" | "viewer") {
+    const target = members.find((m) => m.id === memberId);
+    if (!target) return;
+    const ok = confirm(`Change ${target.name}'s role to ${role}?`);
+    if (!ok) return;
     try {
       await updateMemberRole(memberId, role);
+      toast.success(`${target.name} is now ${role}`);
       loadAll();
-    } catch { /* silent */ }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't change role");
+    }
   }
 
   async function handleRemove(memberId: string) {
-    if (!confirm("Remove this member?")) return;
+    const target = members.find((m) => m.id === memberId);
+    if (!target) return;
+    if (!confirm(`Remove ${target.name} from this workspace? They'll lose access to everything.`)) return;
     try {
       await removeMember(memberId);
+      toast.success(`${target.name} removed`);
       loadAll();
-    } catch { /* silent */ }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't remove member");
+    }
   }
 
   if (!workspace) return null;
@@ -349,13 +363,33 @@ export default function WorkspaceMembersPage() {
 
       {/* Current members */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Current members</CardTitle>
+        <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
+          <CardTitle className="text-base">
+            Current members <span className="ml-1 text-xs font-normal text-zinc-400">({members.length})</span>
+          </CardTitle>
+          {members.length > 5 && (
+            <div className="relative w-full max-w-[200px]">
+              <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search name or email…"
+                className="h-8 w-full rounded-md border border-zinc-200 bg-white pl-7 pr-2 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/30 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+              />
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-            {members.map((member) => (
-              <div key={member.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+            {members
+              .filter((m) => {
+                if (!search.trim()) return true;
+                const q = search.toLowerCase();
+                return m.name.toLowerCase().includes(q) || (m.email ?? "").toLowerCase().includes(q);
+              })
+              .map((member) => (
+              <div key={member.id} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-medium text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
                     {member.name.charAt(0).toUpperCase()}

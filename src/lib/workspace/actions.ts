@@ -213,6 +213,26 @@ export async function updateMemberRole(
 ) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  // Defense-in-depth: verify the caller is an admin/owner in the same
+  // workspace as the target member (RLS should also enforce this).
+  const { data: target } = await supabase
+    .from("workspace_members")
+    .select("workspace_id, role")
+    .eq("id", memberId)
+    .maybeSingle();
+  if (!target) throw new Error("Member not found");
+  if (target.role === "owner") throw new Error("Cannot change the owner's role");
+  const { data: me } = await supabase
+    .from("workspace_members")
+    .select("role")
+    .eq("workspace_id", target.workspace_id as string)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!me || (me.role !== "owner" && me.role !== "admin")) {
+    throw new Error("Only workspace admins can change member roles");
+  }
 
   const { error } = await supabase
     .from("workspace_members")
@@ -244,6 +264,29 @@ export async function updateMemberRole(
 export async function removeMember(memberId: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  // Defense-in-depth admin check.
+  const { data: target } = await supabase
+    .from("workspace_members")
+    .select("workspace_id, role, user_id")
+    .eq("id", memberId)
+    .maybeSingle();
+  if (!target) throw new Error("Member not found");
+  if (target.role === "owner") throw new Error("Cannot remove the owner");
+
+  // Allow a user to remove themselves (leave workspace) OR an admin/owner to remove someone else.
+  if (target.user_id !== user.id) {
+    const { data: me } = await supabase
+      .from("workspace_members")
+      .select("role")
+      .eq("workspace_id", target.workspace_id as string)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!me || (me.role !== "owner" && me.role !== "admin")) {
+      throw new Error("Only workspace admins can remove members");
+    }
+  }
 
   const { error } = await supabase
     .from("workspace_members")

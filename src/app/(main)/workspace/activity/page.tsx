@@ -68,7 +68,7 @@ export default async function WorkspaceActivityPage() {
   }
 
   const [activity, members] = await Promise.all([
-    listWorkspaceActivity(workspaceId, 100),
+    listWorkspaceActivity(workspaceId, 500),
     getWorkspaceMemberStats(workspaceId),
   ]);
 
@@ -87,7 +87,7 @@ export default async function WorkspaceActivityPage() {
       <div className="grid gap-3 sm:grid-cols-3">
         <StatCard icon={<Users className="h-4 w-4" />} label="Members" value={String(members.length)} />
         <StatCard icon={<Activity className="h-4 w-4" />} label="Activity (30d)" value={String(totalActivity30d)} />
-        <StatCard icon={<Activity className="h-4 w-4" />} label="Events logged" value={String(activity.length)} hint={activity.length >= 100 ? "showing latest 100" : undefined} />
+        <StatCard icon={<Activity className="h-4 w-4" />} label="Events logged" value={String(activity.length)} hint={activity.length >= 500 ? "showing latest 500" : undefined} />
       </div>
 
       {/* Member overview */}
