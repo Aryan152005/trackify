@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveWorkspaceId } from "@/lib/workspace/actions";
@@ -7,40 +6,8 @@ import { listWorkspaceActivity, getWorkspaceMemberStats } from "@/lib/activity/a
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import {
-  Activity, Users, FileText, ClipboardList, Columns3, Pencil, Brain, Target, BookOpen,
-  Plus, Edit3, Tag, Trash2, Archive, UserPlus, LogIn,
-} from "lucide-react";
-
-const ENTITY_ICON: Record<string, React.ReactNode> = {
-  page: <FileText className="h-3.5 w-3.5" />,
-  task: <ClipboardList className="h-3.5 w-3.5" />,
-  board: <Columns3 className="h-3.5 w-3.5" />,
-  drawing: <Pencil className="h-3.5 w-3.5" />,
-  mindmap: <Brain className="h-3.5 w-3.5" />,
-  challenge: <Target className="h-3.5 w-3.5" />,
-  entry: <BookOpen className="h-3.5 w-3.5" />,
-};
-
-const ENTITY_HREF: Record<string, (id: string) => string> = {
-  page: (id) => `/notes/${id}`,
-  task: (id) => `/tasks/${id}`,
-  board: (id) => `/boards/${id}`,
-  drawing: (id) => `/drawings/${id}`,
-  mindmap: (id) => `/mindmaps/${id}`,
-  challenge: (id) => `/challenges/${id}`,
-  entry: (id) => `/entries/${id}`,
-};
-
-const ACTION_ICON: Record<string, React.ReactNode> = {
-  created: <Plus className="h-3 w-3" />,
-  edited: <Edit3 className="h-3 w-3" />,
-  renamed: <Tag className="h-3 w-3" />,
-  deleted: <Trash2 className="h-3 w-3" />,
-  archived: <Archive className="h-3 w-3" />,
-  invited: <UserPlus className="h-3 w-3" />,
-  joined: <LogIn className="h-3 w-3" />,
-};
+import { ActivityFeed } from "@/components/workspace/activity-feed";
+import { Activity, Users } from "lucide-react";
 
 const ROLE_COLORS: Record<string, string> = {
   owner: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
@@ -136,52 +103,7 @@ export default async function WorkspaceActivityPage() {
           <CardTitle className="text-base">Recent activity</CardTitle>
         </CardHeader>
         <CardContent>
-          {activity.length === 0 ? (
-            <p className="py-8 text-center text-sm text-zinc-500">No activity logged yet. Edits on pages, boards, challenges, and other items show up here.</p>
-          ) : (
-            <ul className="space-y-3">
-              {activity.map((a) => {
-                const href = ENTITY_HREF[a.entity_type]?.(a.entity_id);
-                return (
-                  <li key={a.id} className="flex items-start gap-3">
-                    <div className="mt-0.5 h-7 w-7 shrink-0 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
-                      {a.actor_avatar ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={a.actor_avatar} alt={a.actor_name} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-[10px] font-bold text-zinc-500">
-                          {a.actor_name.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-zinc-800 dark:text-zinc-200">
-                        <span className="font-medium">{a.actor_name}</span>
-                        <span className="mx-1 inline-flex items-center gap-1 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                          {ACTION_ICON[a.action] ?? <Activity className="h-3 w-3" />}
-                          {a.action}
-                        </span>
-                        <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
-                          {ENTITY_ICON[a.entity_type] ?? <Activity className="h-3 w-3" />}
-                          {a.entity_type}
-                        </span>
-                        {href ? (
-                          <Link href={href} className="ml-1 font-medium text-indigo-600 hover:underline dark:text-indigo-400">
-                            {a.entity_title}
-                          </Link>
-                        ) : (
-                          <span className="ml-1 font-medium">{a.entity_title}</span>
-                        )}
-                      </p>
-                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                        {formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
-                      </p>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+          <ActivityFeed rows={activity} />
         </CardContent>
       </Card>
     </div>

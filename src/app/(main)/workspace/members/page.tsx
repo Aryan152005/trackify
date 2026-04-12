@@ -23,6 +23,8 @@ import type { WorkspaceRole } from "@/lib/types/workspace";
 import { UserPlus, Shield, Trash2, Mail, Eye, RefreshCw, Copy, Check, Loader2, Search } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
+import { MyInvitations } from "@/components/workspace/my-invitations";
+import { DangerZone } from "@/components/workspace/danger-zone";
 
 interface MemberRow {
   id: string;
@@ -35,7 +37,7 @@ interface MemberRow {
 }
 
 export default function WorkspaceMembersPage() {
-  const { workspace } = useWorkspace();
+  const { workspace, role } = useWorkspace();
   const isAdmin = useRequireRole("admin");
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [pending, setPending] = useState<PendingInvitation[]>([]);
@@ -258,6 +260,9 @@ export default function WorkspaceMembersPage() {
 
       {result && <Alert type={result.type}>{result.text}</Alert>}
 
+      {/* Invitations sent to the current user */}
+      <MyInvitations />
+
       {/* Invite form (admins only) */}
       {isAdmin && (
         <Card>
@@ -435,6 +440,15 @@ export default function WorkspaceMembersPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Workspace danger zone — leave / transfer / delete */}
+      <DangerZone
+        workspaceId={workspace.id}
+        workspaceName={workspace.name}
+        isPersonal={workspace.is_personal ?? false}
+        role={role}
+        members={members.map((m) => ({ user_id: m.user_id, name: m.name, role: m.role }))}
+      />
 
       <EmailPreviewDialog
         open={!!previewPayload}

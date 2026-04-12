@@ -112,6 +112,96 @@ export async function resendInvitation(invitationId: string, workspaceId: string
   return { token: newToken };
 }
 
+// ---------------------------------------------------------------------------
+// Invitee-side: list + decline invitations addressed to current user
+// ---------------------------------------------------------------------------
+
+export interface MyInvitation {
+  id: string;
+  email: string;
+  role: string;
+  token: string;
+  workspace_id: string;
+  workspace_name: string;
+  inviter_name: string | null;
+  expires_at: string;
+  created_at: string;
+}
+
+export async function listMyInvitations(): Promise<MyInvitation[]> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user || !user.email) return [];
+
+  const admin = createAdminClient();
+  const { data: invs } = await admin
+    .from("workspace_invitations")
+    .select("id, email, role, token, workspace_id, invited_by, expires_at, created_at")
+    .eq("email", user.email.toLowerCase())
+    .is("accepted_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false });
+
+  const rows = invs ?? [];
+  if (rows.length === 0) return [];
+
+  const wsIds = [...new Set(rows.map((r) => r.workspace_id as string))];
+  const inviterIds = [...new Set(rows.map((r) => r.invited_by as string).filter(Boolean))];
+  const [{ data: wsList }, { data: profiles }] = await Promise.all([
+    admin.from("workspaces").select("id, name").in("id", wsIds),
+    admin.from("user_profiles").select("user_id, name").in("user_id", inviterIds),
+  ]);
+  const wsMap = new Map<string, string>();
+  for (const w of wsList ?? []) wsMap.set(w.id as string, (w.name as string) ?? "Workspace");
+  const pMap = new Map<string, string>();
+  for (const p of profiles ?? []) pMap.set(p.user_id as string, (p.name as string) ?? "");
+
+  return rows.map((r) => ({
+    id: r.id as string,
+    email: r.email as string,
+    role: r.role as string,
+    token: r.token as string,
+    workspace_id: r.workspace_id as string,
+    workspace_name: wsMap.get(r.workspace_id as string) ?? "Workspace",
+    inviter_name: pMap.get(r.invited_by as string) || null,
+    expires_at: r.expires_at as string,
+    created_at: r.created_at as string,
+  }));
+}
+
+/** Invitee declines their own invitation. */
+export async function declineInvitation(invitationId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user || !user.email) throw new Error("Not authenticated");
+
+  const admin = createAdminClient();
+  const { data: inv } = await admin
+    .from("workspace_invitations")
+    .select("email")
+    .eq("id", invitationId)
+    .maybeSingle();
+  if (!inv) throw new Error("Invitation not found");
+  if ((inv.email as string).toLowerCase() !== user.email.toLowerCase()) {
+    throw new Error("You can only decline invitations sent to your own email");
+  }
+
+  const { error } = await admin
+    .from("workspace_invitations")
+    .delete()
+    .eq("id", invitationId);
+  if (error) throw new Error(error.message);
+
+  await logEvent({
+    service: "workspace",
+    level: "info",
+    tag: "invite.decline",
+    message: `Invitee declined invitation`,
+    metadata: { invitationId },
+    userId: user.id,
+  });
+}
+
 /** Render the invite email (subject + HTML) for copy-paste. */
 export async function renderInviteEmailPayload(
   invitationId: string,

@@ -329,6 +329,138 @@ export async function updateWorkspace(
 }
 
 /**
+ * Owner-only: permanently delete a workspace and all its data. Personal
+ * workspaces cannot be deleted (they're auto-created per user).
+ */
+export async function deleteWorkspace(workspaceId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const { data: ws } = await supabase
+    .from("workspaces")
+    .select("is_personal, name, created_by")
+    .eq("id", workspaceId)
+    .maybeSingle();
+  if (!ws) throw new Error("Workspace not found");
+  if (ws.is_personal) throw new Error("Personal workspaces cannot be deleted");
+
+  // Verify caller is owner.
+  const { data: me } = await supabase
+    .from("workspace_members")
+    .select("role")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!me || me.role !== "owner") {
+    throw new Error("Only the workspace owner can delete it");
+  }
+
+  const { error } = await supabase.from("workspaces").delete().eq("id", workspaceId);
+  if (error) throw new Error(error.message);
+
+  await logEvent({
+    service: "workspace",
+    level: "warn",
+    tag: "workspace.delete",
+    message: `Workspace deleted: ${ws.name}`,
+    metadata: { workspaceId },
+    userId: user.id,
+  });
+}
+
+/**
+ * Current user leaves a workspace (anyone except the owner). Personal
+ * workspaces can't be left — they're tied to the user account.
+ */
+export async function leaveWorkspace(workspaceId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const { data: ws } = await supabase
+    .from("workspaces")
+    .select("is_personal")
+    .eq("id", workspaceId)
+    .maybeSingle();
+  if (!ws) throw new Error("Workspace not found");
+  if (ws.is_personal) throw new Error("You can't leave your personal workspace");
+
+  const { data: me } = await supabase
+    .from("workspace_members")
+    .select("id, role")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!me) throw new Error("You're not a member of this workspace");
+  if (me.role === "owner") {
+    throw new Error("Transfer ownership first — owners can't leave their workspace");
+  }
+
+  const { error } = await supabase.from("workspace_members").delete().eq("id", me.id);
+  if (error) throw new Error(error.message);
+
+  await logEvent({
+    service: "workspace",
+    level: "info",
+    tag: "workspace.leave",
+    message: `Member left workspace`,
+    metadata: { workspaceId },
+    userId: user.id,
+  });
+}
+
+/**
+ * Transfer ownership to another member. Current owner becomes admin. Only the
+ * current owner can do this; target must already be a member of the workspace.
+ */
+export async function transferOwnership(workspaceId: string, toUserId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+  if (toUserId === user.id) throw new Error("You're already the owner");
+
+  const { data: me } = await supabase
+    .from("workspace_members")
+    .select("id, role")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!me || me.role !== "owner") throw new Error("Only the current owner can transfer ownership");
+
+  const { data: target } = await supabase
+    .from("workspace_members")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", toUserId)
+    .maybeSingle();
+  if (!target) throw new Error("The chosen user isn't a member of this workspace");
+
+  // Two updates — admin client to avoid RLS ping-pong while roles momentarily overlap.
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  const admin = createAdminClient();
+  const { error: e1 } = await admin
+    .from("workspace_members")
+    .update({ role: "admin" })
+    .eq("id", me.id);
+  if (e1) throw new Error(e1.message);
+  const { error: e2 } = await admin
+    .from("workspace_members")
+    .update({ role: "owner" })
+    .eq("id", target.id);
+  if (e2) throw new Error(e2.message);
+
+  await logEvent({
+    service: "workspace",
+    level: "warn",
+    tag: "workspace.transferOwnership",
+    message: `Ownership transferred`,
+    metadata: { workspaceId, fromUserId: user.id, toUserId },
+    userId: user.id,
+  });
+}
+
+/**
  * Returns display name + email for a list of user IDs. Falls back to
  * auth.users.email (via admin client) when the user_profiles row is missing —
  * eliminates "Unknown" labels on the members page.
