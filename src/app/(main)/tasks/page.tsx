@@ -2,19 +2,17 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveWorkspaceId } from "@/lib/workspace/actions";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
-import { TaskRow } from "@/components/tasks/task-row";
+import { TasksGroups } from "@/components/tasks/tasks-groups";
 import { Plus, CheckSquare } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SharedSection } from "@/components/collaboration/shared-section";
+import type { Task } from "@/lib/types/database";
 
 export default async function TasksPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const { data: profile } = await supabase
@@ -22,7 +20,6 @@ export default async function TasksPage() {
     .select("name")
     .eq("user_id", user.id)
     .single();
-
   if (!profile) redirect("/onboarding");
 
   const workspaceId = await getActiveWorkspaceId();
@@ -39,20 +36,15 @@ export default async function TasksPage() {
     ? await tasksQuery.eq("workspace_id", workspaceId)
     : await tasksQuery;
 
-  const pendingTasks = tasks?.filter((t) => t.status === "pending" || t.status === "in-progress") || [];
-  const completedTasks = tasks?.filter((t) => t.status === "done") || [];
-
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         title="Your Tasks"
-        description="Everything on your plate, organized and prioritized"
+        description="Everything on your plate — grouped by when they're due."
         actions={
           <>
             <Link href="/boards">
-              <Button variant="outline">
-                Boards
-              </Button>
+              <Button variant="outline">Boards</Button>
             </Link>
             <Link href="/tasks/new">
               <Button>
@@ -64,7 +56,7 @@ export default async function TasksPage() {
         }
       />
 
-      {(!tasks || tasks.length === 0) ? (
+      {!tasks || tasks.length === 0 ? (
         <EmptyState
           icon={<CheckSquare className="h-6 w-6" />}
           title="No tasks yet"
@@ -73,43 +65,7 @@ export default async function TasksPage() {
           actionHref="/tasks/new"
         />
       ) : (
-      <>
-      {/* Pending Tasks */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Pending Tasks ({pendingTasks.length})</CardTitle>
-          <CardDescription>Tasks that need your attention</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {pendingTasks.length > 0 ? (
-            <div className="space-y-2">
-              {pendingTasks.map((task) => (
-                <TaskRow key={task.id} task={task} />
-              ))}
-            </div>
-          ) : (
-            <p className="py-8 text-center text-zinc-500 dark:text-zinc-400">No pending tasks. Great job! 🎉</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Completed Tasks */}
-      {completedTasks.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Completed Tasks ({completedTasks.length})</CardTitle>
-            <CardDescription>Tasks you&apos;ve finished</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {completedTasks.map((task) => (
-                <TaskRow key={task.id} task={task} completed />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-      </>
+        <TasksGroups tasks={tasks as Task[]} />
       )}
 
       <SharedSection entityType="task" />
