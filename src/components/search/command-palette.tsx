@@ -27,6 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useWorkspaceId } from "@/lib/workspace/hooks";
 import { globalSearch, getRecentItems, getQuickActions } from "@/lib/search/actions";
+import { globalFtsSearch, type FtsResult } from "@/lib/search/fts-actions";
 import type { SearchResult, QuickAction } from "@/lib/search/types";
 import { SearchResultItem } from "./search-result-item";
 import { SearchTrigger } from "./search-trigger";
@@ -72,6 +73,7 @@ export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [ftsResults, setFtsResults] = useState<FtsResult[]>([]);
   const [recentItems, setRecentItems] = useState<SearchResult[]>([]);
   const [quickActions, setQuickActions] = useState<QuickAction[]>([]);
   const [loading, setLoading] = useState(false);
@@ -105,6 +107,7 @@ export function CommandPalette() {
     if (!open) return;
     setQuery("");
     setResults([]);
+    setFtsResults([]);
     setActiveIndex(0);
 
     getQuickActions().then(setQuickActions);
@@ -122,18 +125,28 @@ export function CommandPalette() {
 
     if (!query.trim() || !workspaceId) {
       setResults([]);
+      setFtsResults([]);
       setLoading(false);
       return;
     }
 
     setLoading(true);
     debounceRef.current = setTimeout(async () => {
+      const q = query.trim();
+      const structuredPromise = globalSearch(workspaceId, q).catch(() => [] as SearchResult[]);
+      const ftsPromise =
+        q.length >= 3
+          ? globalFtsSearch(q, workspaceId).catch(() => [] as FtsResult[])
+          : Promise.resolve([] as FtsResult[]);
+
       try {
-        const data = await globalSearch(workspaceId, query);
+        const [data, fts] = await Promise.all([structuredPromise, ftsPromise]);
         setResults(data);
+        setFtsResults(fts);
         setActiveIndex(0);
       } catch {
         setResults([]);
+        setFtsResults([]);
       } finally {
         setLoading(false);
       }
@@ -164,8 +177,15 @@ export function CommandPalette() {
   // Build flat selectable items
   type SelectableItem =
     | { kind: "result"; result: SearchResult }
+    | { kind: "fts"; result: FtsResult }
     | { kind: "action"; action: QuickAction }
     | { kind: "recent"; result: SearchResult };
+
+  // Dedupe FTS items against structured results by (type, id)
+  const structuredKeys = new Set(results.map((r) => `${r.type}:${r.id}`));
+  const dedupedFts = ftsResults.filter(
+    (r) => !structuredKeys.has(`${r.type}:${r.id}`)
+  );
 
   const selectableItems: SelectableItem[] = [];
 
@@ -174,6 +194,9 @@ export function CommandPalette() {
       for (const item of group.items) {
         selectableItems.push({ kind: "result", result: item });
       }
+    }
+    for (const item of dedupedFts) {
+      selectableItems.push({ kind: "fts", result: item });
     }
   } else {
     // Quick actions first, then recent items
@@ -203,6 +226,8 @@ export function CommandPalette() {
     (item: SelectableItem) => {
       if (item.kind === "action") {
         navigateTo(item.action.action);
+      } else if (item.kind === "fts") {
+        navigateTo(item.result.href);
       } else {
         navigateTo(item.result.url);
       }
@@ -312,7 +337,7 @@ export function CommandPalette() {
                       role="listbox"
                     >
                       {/* --- Searching state --- */}
-                      {isSearching && !loading && results.length === 0 && (
+                      {isSearching && !loading && results.length === 0 && dedupedFts.length === 0 && (
                         <div className="flex flex-col items-center justify-center py-12 text-zinc-400">
                           <Search className="mb-2 h-8 w-8" />
                           <p className="text-sm">
@@ -348,6 +373,47 @@ export function CommandPalette() {
                             })}
                           </div>
                         ))}
+
+                      {/* --- Full-text match section --- */}
+                      {isSearching && dedupedFts.length > 0 && (
+                        <div className="mb-1">
+                          <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                            Full-text matches
+                          </div>
+                          {dedupedFts.map((item) => {
+                            flatIndex++;
+                            const idx = flatIndex;
+                            const adapted: SearchResult = {
+                              id: item.id,
+                              type: item.type,
+                              title: item.title,
+                              subtitle: item.snippet,
+                              url: item.href,
+                              icon:
+                                item.type === "task"
+                                  ? "CheckSquare"
+                                  : item.type === "entry"
+                                  ? "Clock"
+                                  : item.type === "page"
+                                  ? "FileText"
+                                  : "Bell",
+                              updatedAt: item.updatedAt ?? "",
+                              highlight: item.snippet,
+                            };
+                            return (
+                              <SearchResultItem
+                                key={`fts-${item.type}-${item.id}`}
+                                result={adapted}
+                                isActive={activeIndex === idx}
+                                query={query}
+                                onClick={() =>
+                                  selectItem({ kind: "fts", result: item })
+                                }
+                              />
+                            );
+                          })}
+                        </div>
+                      )}
 
                       {/* --- Empty state: quick actions + recent --- */}
                       {!isSearching && (
@@ -462,7 +528,7 @@ export function CommandPalette() {
                       </div>
                       <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
                         {isSearching
-                          ? `${results.length} result${results.length !== 1 ? "s" : ""}`
+                          ? `${results.length + dedupedFts.length} result${results.length + dedupedFts.length !== 1 ? "s" : ""}`
                           : "Type to search"}
                       </span>
                     </div>

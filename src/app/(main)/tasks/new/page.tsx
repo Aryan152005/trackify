@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { DatePicker } from "@/components/ui/date-picker";
 import type { TaskPriority } from "@/lib/types/database";
 import { toast } from "sonner";
 
@@ -117,14 +118,15 @@ export default function NewTaskPage() {
                 <label htmlFor="dueDate" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   Due Date
                 </label>
-                <input
-                  id="dueDate"
-                  type="date"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-base text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50 sm:text-sm"
-                  disabled={loading}
-                />
+                <div className="mt-2">
+                  <DatePicker
+                    id="dueDate"
+                    value={dueDate || undefined}
+                    onChange={(v) => setDueDate(v ?? "")}
+                    disabled={loading}
+                    placeholder="Pick a due date"
+                  />
+                </div>
               </div>
 
               <div>

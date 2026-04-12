@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
   DndContext,
   DragOverlay,
@@ -166,12 +167,20 @@ export function KanbanBoard({
       // --- Column reorder ---
       if (activeData?.type === "column") {
         if (active.id !== over.id) {
+          const snapshot = columns;
           const oldIdx = columns.findIndex((c) => c.id === active.id);
           const newIdx = columns.findIndex((c) => c.id === over.id);
           if (oldIdx >= 0 && newIdx >= 0) {
             const reordered = arrayMove(columns, oldIdx, newIdx);
+            // Optimistic local update
             setColumns(reordered);
-            await onReorderColumns(reordered.map((c) => c.id));
+            try {
+              await onReorderColumns(reordered.map((c) => c.id));
+            } catch (err) {
+              // Revert on failure
+              setColumns(snapshot);
+              toast.error(err instanceof Error ? err.message : "Could not reorder columns");
+            }
           }
         }
         return;
@@ -183,10 +192,9 @@ export function KanbanBoard({
         const column = findColumnByTaskId(taskId);
         if (!column) return;
 
-        // Find the task's position in its current column
         const taskIdx = column.tasks.findIndex((t) => t.id === taskId);
 
-        // Also handle same-column reorder via over being another task
+        const snapshot = columns;
         const overData = over.data.current;
         if (overData?.type === "task" && column.tasks.some((t) => t.id === over.id)) {
           const overIdx = column.tasks.findIndex((t) => t.id === over.id);
@@ -200,7 +208,12 @@ export function KanbanBoard({
           }
         }
 
-        await onMoveTask(taskId, column.id, taskIdx >= 0 ? taskIdx : 0);
+        try {
+          await onMoveTask(taskId, column.id, taskIdx >= 0 ? taskIdx : 0);
+        } catch (err) {
+          setColumns(snapshot);
+          toast.error(err instanceof Error ? err.message : "Could not move task");
+        }
       }
     },
     [columns, findColumnByTaskId, onMoveTask, onReorderColumns]

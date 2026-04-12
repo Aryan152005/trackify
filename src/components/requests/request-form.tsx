@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Send, X } from "lucide-react";
+import { DatePicker } from "@/components/ui/date-picker";
 import type { RequestType } from "@/lib/types/notification";
 import { toast } from "sonner";
 
@@ -167,11 +168,10 @@ export function RequestForm({
             <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Due Date
             </label>
-            <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className={inputClasses}
+            <DatePicker
+              value={dueDate || undefined}
+              onChange={(v) => setDueDate(v ?? "")}
+              placeholder="Pick a due date"
             />
           </div>
 

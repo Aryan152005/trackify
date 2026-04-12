@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Pin, PinOff } from "lucide-react";
+import { getPinnedNavItems, togglePinNavItem } from "@/lib/preferences/actions";
 import {
   Menu,
   X,
@@ -86,6 +88,7 @@ const navSections = [
 
 export function MobileNav({ isAdmin = false }: { isAdmin?: boolean }) {
   const [open, setOpen] = useState(false);
+  const [pinned, setPinned] = useState<string[]>([]);
   const pathname = usePathname();
   const sections = isAdmin
     ? [...navSections, {
@@ -93,6 +96,32 @@ export function MobileNav({ isAdmin = false }: { isAdmin?: boolean }) {
         items: [{ href: "/admin", label: "Admin Dashboard", icon: Shield }],
       }]
     : navSections;
+
+  // Load pinned items on open (fresh each time so cross-tab edits land)
+  useEffect(() => {
+    if (!open) return;
+    getPinnedNavItems().then(setPinned).catch(() => setPinned([]));
+  }, [open]);
+
+  async function handleTogglePin(href: string, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const prev = pinned;
+    // Optimistic
+    setPinned((p) => (p.includes(href) ? p.filter((h) => h !== href) : [...p, href]));
+    try {
+      const next = await togglePinNavItem(href);
+      setPinned(next);
+    } catch {
+      setPinned(prev);
+    }
+  }
+
+  // Collect all nav items to resolve pinned hrefs back to {href,label,icon}
+  const allItems = sections.flatMap((s) => s.items);
+  const pinnedResolved = pinned
+    .map((href) => allItems.find((i) => i.href === href))
+    .filter((i): i is NonNullable<typeof i> => !!i);
 
   const close = useCallback(() => setOpen(false), []);
 
@@ -165,8 +194,47 @@ export function MobileNav({ isAdmin = false }: { isAdmin?: boolean }) {
         </div>
 
         <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
+          {/* Pinned section (user favorites) */}
+          {pinnedResolved.length > 0 && (
+            <div>
+              <p className="mb-1 flex items-center gap-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-indigo-500 dark:text-indigo-400">
+                <Pin className="h-3 w-3" />
+                Pinned
+              </p>
+              {pinnedResolved.map(({ href, label, icon: Icon }) => {
+                const active = pathname === href || pathname.startsWith(href + "/");
+                return (
+                  <div key={"pin-" + href} className="group relative">
+                    <Link
+                      href={href}
+                      onClick={close}
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg px-3 py-2.5 pr-10 text-sm font-medium transition-colors",
+                        active
+                          ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300"
+                          : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                      )}
+                    >
+                      <Icon className={cn("h-4.5 w-4.5 shrink-0", active ? "text-indigo-600 dark:text-indigo-400" : "text-zinc-400 dark:text-zinc-500")} />
+                      {label}
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={(e) => handleTogglePin(href, e)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-indigo-500 hover:bg-indigo-100 dark:text-indigo-400 dark:hover:bg-indigo-950/50"
+                      aria-label={`Unpin ${label}`}
+                      title="Unpin"
+                    >
+                      <PinOff className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {sections.map((section, si) => (
-            <div key={si} className={cn(si > 0 && "mt-4")}>
+            <div key={si} className={cn((si > 0 || pinnedResolved.length > 0) && "mt-4")}>
               {section.label && (
                 <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
                   {section.label}
@@ -174,21 +242,37 @@ export function MobileNav({ isAdmin = false }: { isAdmin?: boolean }) {
               )}
               {section.items.map(({ href, label, icon: Icon }) => {
                 const active = pathname === href || pathname.startsWith(href + "/");
+                const isPinned = pinned.includes(href);
                 return (
-                  <Link
-                    key={href}
-                    href={href}
-                    onClick={close}
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                      active
-                        ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300"
-                        : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                    )}
-                  >
-                    <Icon className={cn("h-4.5 w-4.5 shrink-0", active ? "text-indigo-600 dark:text-indigo-400" : "text-zinc-400 dark:text-zinc-500")} />
-                    {label}
-                  </Link>
+                  <div key={href} className="group relative">
+                    <Link
+                      href={href}
+                      onClick={close}
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg px-3 py-2.5 pr-10 text-sm font-medium transition-colors",
+                        active
+                          ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300"
+                          : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                      )}
+                    >
+                      <Icon className={cn("h-4.5 w-4.5 shrink-0", active ? "text-indigo-600 dark:text-indigo-400" : "text-zinc-400 dark:text-zinc-500")} />
+                      {label}
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={(e) => handleTogglePin(href, e)}
+                      className={cn(
+                        "absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 opacity-0 transition group-hover:opacity-100",
+                        isPinned
+                          ? "text-indigo-500 opacity-100 hover:bg-indigo-100 dark:text-indigo-400 dark:hover:bg-indigo-950/50"
+                          : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                      )}
+                      aria-label={isPinned ? `Unpin ${label}` : `Pin ${label}`}
+                      title={isPinned ? "Unpin" : "Pin to top"}
+                    >
+                      {isPinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
                 );
               })}
             </div>

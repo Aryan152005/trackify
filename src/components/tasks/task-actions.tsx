@@ -1,12 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import type { Task } from "@/lib/types/database";
-import { CheckCircle2, XCircle, Play } from "lucide-react";
+import { CheckCircle2, XCircle, Play, Loader2 } from "lucide-react";
 
 interface TaskActionsProps {
   task: Task;
@@ -14,36 +15,47 @@ interface TaskActionsProps {
 
 export function TaskActions({ task }: TaskActionsProps) {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  // Optimistic status — shown immediately on click, reverted on error
+  const [optimisticStatus, setOptimisticStatus] = useState<Task["status"]>(task.status);
+  const [pendingStatus, setPendingStatus] = useState<Task["status"] | null>(null);
+  const [, startTransition] = useTransition();
   const supabase = createClient();
 
-  async function updateStatus(newStatus: Task["status"]) {
-    setLoading(true);
-    try {
-      const updateData: Partial<Task> = {
-        status: newStatus,
-      };
+  const current = pendingStatus ?? optimisticStatus;
 
-      if (newStatus === "done" && task.status !== "done") {
-        updateData.completed_at = new Date().toISOString();
-      } else if (newStatus !== "done") {
-        updateData.completed_at = null;
+  function updateStatus(newStatus: Task["status"]) {
+    if (pendingStatus) return; // prevent double-click
+    const prev = optimisticStatus;
+    setOptimisticStatus(newStatus);
+    setPendingStatus(newStatus);
+
+    startTransition(async () => {
+      try {
+        const updateData: Partial<Task> = { status: newStatus };
+        if (newStatus === "done" && prev !== "done") {
+          updateData.completed_at = new Date().toISOString();
+        } else if (newStatus !== "done") {
+          updateData.completed_at = null;
+        }
+        const { error } = await supabase.from("tasks").update(updateData).eq("id", task.id);
+        if (error) throw error;
+        toast.success(
+          newStatus === "done" ? "Marked as done"
+          : newStatus === "in-progress" ? "Task started"
+          : "Task reopened"
+        );
+        router.refresh();
+      } catch (err) {
+        // Revert optimistic update
+        setOptimisticStatus(prev);
+        toast.error(err instanceof Error ? err.message : "Failed to update task");
+      } finally {
+        setPendingStatus(null);
       }
-
-      const { error } = await supabase.from("tasks").update(updateData).eq("id", task.id);
-
-      if (error) {
-        console.error("Error updating task:", error);
-        return;
-      }
-
-      router.refresh();
-    } catch (err) {
-      console.error("Error:", err);
-    } finally {
-      setLoading(false);
-    }
+    });
   }
+
+  const busy = !!pendingStatus;
 
   return (
     <Card>
@@ -51,49 +63,27 @@ export function TaskActions({ task }: TaskActionsProps) {
         <CardTitle>Actions</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
-        {task.status !== "done" && (
-          <Button
-            className="w-full"
-            onClick={() => updateStatus("done")}
-            disabled={loading}
-          >
-            <CheckCircle2 className="mr-2 h-4 w-4" />
+        {current !== "done" && (
+          <Button className="w-full" onClick={() => updateStatus("done")} disabled={busy}>
+            {busy && pendingStatus === "done" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
             Mark as Done
           </Button>
         )}
-
-        {task.status === "pending" && (
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => updateStatus("in-progress")}
-            disabled={loading}
-          >
-            <Play className="mr-2 h-4 w-4" />
+        {current === "pending" && (
+          <Button variant="outline" className="w-full" onClick={() => updateStatus("in-progress")} disabled={busy}>
+            {busy && pendingStatus === "in-progress" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
             Start Task
           </Button>
         )}
-
-        {task.status === "done" && (
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => updateStatus("pending")}
-            disabled={loading}
-          >
-            <XCircle className="mr-2 h-4 w-4" />
+        {current === "done" && (
+          <Button variant="outline" className="w-full" onClick={() => updateStatus("pending")} disabled={busy}>
+            {busy && pendingStatus === "pending" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
             Reopen Task
           </Button>
         )}
-
-        {task.status === "in-progress" && (
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => updateStatus("pending")}
-            disabled={loading}
-          >
-            <XCircle className="mr-2 h-4 w-4" />
+        {current === "in-progress" && (
+          <Button variant="outline" className="w-full" onClick={() => updateStatus("pending")} disabled={busy}>
+            {busy && pendingStatus === "pending" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <XCircle className="mr-2 h-4 w-4" />}
             Mark as Pending
           </Button>
         )}

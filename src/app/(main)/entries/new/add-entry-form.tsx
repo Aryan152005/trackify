@@ -11,6 +11,7 @@ import {
   Briefcase, Lightbulb, ArrowRight, Smile, Gauge, TagIcon, Loader2,
 } from "lucide-react";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { DatePicker } from "@/components/ui/date-picker";
 import { toast } from "sonner";
 
 const BUCKET = "entry-attachments";
@@ -39,9 +40,10 @@ export function AddEntryForm({ userId, tags }: AddEntryFormProps) {
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const [entryDate, setEntryDate] = useState<string | undefined>(todayISO);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const today = new Date().toISOString().slice(0, 10);
 
   function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
@@ -169,13 +171,13 @@ export function AddEntryForm({ userId, tags }: AddEntryFormProps) {
       >
         <div className="grid gap-4 lg:grid-cols-3">
           <Field label="Date" icon={<Calendar className="h-3.5 w-3.5" />} htmlFor="date">
-            <input
+            <DatePicker
               id="date"
               name="date"
-              type="date"
+              value={entryDate}
+              onChange={(v) => setEntryDate(v)}
               required
-              defaultValue={today}
-              className={INPUT_CLASS}
+              placeholder="Select date"
             />
           </Field>
           <Field label="Status" icon={<CheckCircle2 className="h-3.5 w-3.5" />} htmlFor="status">
