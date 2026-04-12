@@ -98,13 +98,13 @@ export function TldrawWrapper({ initialData, onChange, remoteUpdate }: TldrawWra
     };
   }, []);
 
-  // Apply remote collaborator updates into the live scene.
+  // Apply remote collaborator updates — ONLY elements, so each user keeps
+  // their own tool, zoom, camera position, and selection.
   useEffect(() => {
     if (!remoteUpdate || !apiRef.current) return;
     try {
       apiRef.current.updateScene({
         elements: (remoteUpdate.elements ?? []) as never,
-        appState: { ...(remoteUpdate.appState ?? {}), collaborators: new Map() } as never,
       });
     } catch {
       // ignore — scene not ready

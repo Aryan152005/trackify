@@ -102,9 +102,10 @@ export default function DrawingDetailPage() {
       config: { broadcast: { self: false } },
     });
     channel.on("broadcast", { event: "scene" }, (payload) => {
-      const p = payload.payload as { from: string; elements?: unknown[]; appState?: Record<string, unknown> };
+      const p = payload.payload as { from: string; elements?: unknown[] };
       if (!p || p.from === selfIdRef.current) return;
-      setRemoteUpdate({ elements: p.elements, appState: p.appState });
+      // Only apply elements — keep local appState (tool, zoom, camera) intact.
+      setRemoteUpdate({ elements: p.elements });
     });
     channel.subscribe();
     channelRef.current = channel;
@@ -122,7 +123,9 @@ export default function DrawingDetailPage() {
     (data: Record<string, unknown>) => {
       setSaveStatus("unsaved");
 
-      // Broadcast to peers immediately for live collab (no DB wait).
+      // Broadcast ONLY the canvas elements. appState holds per-user UI state
+      // (selected tool, zoom, camera, selection) which must stay independent
+      // — broadcasting it would make user B's tool change when user A clicks erase.
       if (channelRef.current) {
         channelRef.current.send({
           type: "broadcast",
@@ -130,7 +133,6 @@ export default function DrawingDetailPage() {
           payload: {
             from: selfIdRef.current,
             elements: (data as { elements?: unknown[] }).elements ?? [],
-            appState: (data as { appState?: Record<string, unknown> }).appState ?? {},
           },
         });
       }
