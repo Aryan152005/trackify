@@ -84,18 +84,35 @@ export function RequestForm({
             <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Recipient <span className="text-red-500">*</span>
             </label>
-            <Select value={toUserId} onValueChange={(v) => setToUserId(v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a member..." />
-              </SelectTrigger>
-              <SelectContent>
-                {members.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    {m.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {members.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-4 text-sm dark:border-zinc-700 dark:bg-zinc-800/40">
+                <p className="text-zinc-700 dark:text-zinc-300">
+                  No teammates in this workspace yet.
+                </p>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  Invite someone first —{" "}
+                  <a
+                    href="/workspace/members"
+                    className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                  >
+                    go to Team Members →
+                  </a>
+                </p>
+              </div>
+            ) : (
+              <Select value={toUserId} onValueChange={(v) => setToUserId(v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder={`Select from ${members.length} teammate${members.length === 1 ? "" : "s"}...`} />
+                </SelectTrigger>
+                <SelectContent>
+                  {members.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           {/* Type */}
@@ -174,7 +191,7 @@ export function RequestForm({
               <X className="mr-1 h-4 w-4" />
               Cancel
             </Button>
-            <Button type="submit" disabled={submitting}>
+            <Button type="submit" disabled={submitting || members.length === 0}>
               {submitting ? (
                 <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
               ) : (
