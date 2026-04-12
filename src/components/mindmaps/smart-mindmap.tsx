@@ -78,29 +78,38 @@ const nodeTypes = { smart: SmartNodeCard };
 
 // ─── Layout: radial cluster by kind ─────────────────────────────
 
-function layoutNodes(nodes: SmartNode[]): Node[] {
-  // Group by kind in concentric rings so the user sees clusters at a glance.
+// Column-per-kind layout — 4 vertical lanes sorted by connection density so
+// highly-connected nodes sit near the middle of their column. Much tidier
+// than a radial burst for ≤50 nodes.
+function layoutNodes(nodes: SmartNode[], edges: SmartGraph["edges"]): Node[] {
   const byKind: Record<EntityKind, SmartNode[]> = { task: [], reminder: [], entry: [], page: [] };
   nodes.forEach((n) => byKind[n.kind].push(n));
 
-  const RING_SPACING = 280;
-  const kindOrder: EntityKind[] = ["task", "reminder", "entry", "page"];
+  // Count connections per node so the most linked items anchor each column
+  const degree = new Map<string, number>();
+  edges.forEach((e) => {
+    degree.set(e.source, (degree.get(e.source) ?? 0) + 1);
+    degree.set(e.target, (degree.get(e.target) ?? 0) + 1);
+  });
+  const kindOrder: EntityKind[] = ["entry", "task", "reminder", "page"]; // left → right
+  const COL_WIDTH = 300;
+  const ROW_HEIGHT = 110;
   const result: Node[] = [];
 
-  kindOrder.forEach((kind, ringIdx) => {
-    const group = byKind[kind];
+  kindOrder.forEach((kind, colIdx) => {
+    const group = byKind[kind]
+      .slice()
+      .sort((a, b) => (degree.get(b.id) ?? 0) - (degree.get(a.id) ?? 0));
     if (group.length === 0) return;
-    const radius = (ringIdx + 1) * RING_SPACING;
-    const step = (2 * Math.PI) / Math.max(group.length, 3);
-    const angleOffset = ringIdx * 0.3; // stagger rings so nodes don't line up
+    // Center each column vertically around y=0, spaced by ROW_HEIGHT
+    const startY = -((group.length - 1) * ROW_HEIGHT) / 2;
     group.forEach((n, i) => {
-      const angle = i * step + angleOffset;
       result.push({
         id: n.id,
         type: "smart",
         position: {
-          x: Math.cos(angle) * radius + 600,
-          y: Math.sin(angle) * radius + 400,
+          x: colIdx * COL_WIDTH,
+          y: startY + i * ROW_HEIGHT,
         },
         data: n,
       });
@@ -142,8 +151,73 @@ export function SmartMindMap({ graph, workspaceId }: Props) {
   const [pending, startTransition] = useTransition();
   const [pendingId, setPendingId] = useState<string | null>(null);
 
-  const rfNodes = useMemo(() => layoutNodes(graph.nodes), [graph.nodes]);
-  const rfEdges = useMemo(() => mapEdges(graph.edges), [graph.edges]);
+  // Filter toggles
+  const [showKinds, setShowKinds] = useState<Record<EntityKind, boolean>>({
+    task: true,
+    reminder: true,
+    entry: true,
+    page: true,
+  });
+  const [showEdgeKinds, setShowEdgeKinds] = useState({ keyword: true, "same-day": true });
+
+  // Hover state — node id that's currently hovered; neighbors get highlighted, others dim
+  const [hoverId, setHoverId] = useState<string | null>(null);
+
+  // Filtered view of graph based on toggles
+  const visibleNodes = useMemo(
+    () => graph.nodes.filter((n) => showKinds[n.kind]),
+    [graph.nodes, showKinds]
+  );
+  const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((n) => n.id)), [visibleNodes]);
+  const visibleEdges = useMemo(
+    () =>
+      graph.edges.filter(
+        (e) =>
+          visibleNodeIds.has(e.source) &&
+          visibleNodeIds.has(e.target) &&
+          showEdgeKinds[e.kind as keyof typeof showEdgeKinds]
+      ),
+    [graph.edges, visibleNodeIds, showEdgeKinds]
+  );
+
+  // Neighbour map (source/target both ways) for hover highlights
+  const neighbours = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    visibleEdges.forEach((e) => {
+      if (!map.has(e.source)) map.set(e.source, new Set());
+      if (!map.has(e.target)) map.set(e.target, new Set());
+      map.get(e.source)!.add(e.target);
+      map.get(e.target)!.add(e.source);
+    });
+    return map;
+  }, [visibleEdges]);
+
+  const rfNodes = useMemo(() => {
+    const laid = layoutNodes(visibleNodes, visibleEdges);
+    if (!hoverId) return laid;
+    const highlighted = new Set([hoverId, ...(neighbours.get(hoverId) ?? [])]);
+    return laid.map((n) => ({
+      ...n,
+      style: { opacity: highlighted.has(n.id) ? 1 : 0.25, transition: "opacity 150ms" },
+    }));
+  }, [visibleNodes, visibleEdges, hoverId, neighbours]);
+
+  const rfEdges = useMemo(() => {
+    const mapped = mapEdges(visibleEdges);
+    if (!hoverId) return mapped;
+    return mapped.map((e) => {
+      const connected = e.source === hoverId || e.target === hoverId;
+      return {
+        ...e,
+        animated: connected ? true : false,
+        style: {
+          ...(e.style as React.CSSProperties),
+          opacity: connected ? 1 : 0.12,
+          transition: "opacity 150ms",
+        },
+      };
+    });
+  }, [visibleEdges, hoverId]);
 
   function runAction(sugg: Suggestion, fn: () => Promise<void>) {
     setPendingId(sugg.id);
@@ -198,9 +272,14 @@ export function SmartMindMap({ graph, workspaceId }: Props) {
               fitView
               fitViewOptions={{ padding: 0.2 }}
               onNodeClick={onNodeClick}
+              onNodeMouseEnter={(_, n) => setHoverId(n.id)}
+              onNodeMouseLeave={() => setHoverId(null)}
+              onPaneClick={() => setHoverId(null)}
               proOptions={{ hideAttribution: true }}
               minZoom={0.2}
               maxZoom={2}
+              nodesDraggable
+              panOnDrag
             >
               <Background variant={BackgroundVariant.Dots} gap={18} size={1} />
               <MiniMap pannable zoomable className="!bg-zinc-100 dark:!bg-zinc-800" />
@@ -219,8 +298,63 @@ export function SmartMindMap({ graph, workspaceId }: Props) {
         </div>
       </Card>
 
-      {/* Suggestions */}
+      {/* Suggestions + Filters */}
       <div className="space-y-3">
+        {/* Filter toggles */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Filter graph</CardTitle>
+            <CardDescription className="text-xs">Hide/show entity types and connection kinds.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div className="grid grid-cols-2 gap-1.5">
+              <ToggleChip
+                active={showKinds.task}
+                onClick={() => setShowKinds((s) => ({ ...s, task: !s.task }))}
+                color="bg-indigo-500"
+                label={`Tasks (${graph.nodes.filter((n) => n.kind === "task").length})`}
+              />
+              <ToggleChip
+                active={showKinds.reminder}
+                onClick={() => setShowKinds((s) => ({ ...s, reminder: !s.reminder }))}
+                color="bg-amber-500"
+                label={`Reminders (${graph.nodes.filter((n) => n.kind === "reminder").length})`}
+              />
+              <ToggleChip
+                active={showKinds.entry}
+                onClick={() => setShowKinds((s) => ({ ...s, entry: !s.entry }))}
+                color="bg-emerald-500"
+                label={`Entries (${graph.nodes.filter((n) => n.kind === "entry").length})`}
+              />
+              <ToggleChip
+                active={showKinds.page}
+                onClick={() => setShowKinds((s) => ({ ...s, page: !s.page }))}
+                color="bg-purple-500"
+                label={`Notes (${graph.nodes.filter((n) => n.kind === "page").length})`}
+              />
+            </div>
+            <div className="border-t border-zinc-200 pt-2 dark:border-zinc-800">
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Connections
+              </p>
+              <div className="grid grid-cols-2 gap-1.5">
+                <ToggleChip
+                  active={showEdgeKinds.keyword}
+                  onClick={() => setShowEdgeKinds((s) => ({ ...s, keyword: !s.keyword }))}
+                  color="bg-indigo-400"
+                  label="Keyword"
+                />
+                <ToggleChip
+                  active={showEdgeKinds["same-day"]}
+                  onClick={() => setShowEdgeKinds((s) => ({ ...s, "same-day": !s["same-day"] }))}
+                  color="bg-amber-400"
+                  label="Same day"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-1.5 text-base">
@@ -281,6 +415,30 @@ export function SmartMindMap({ graph, workspaceId }: Props) {
         </Card>
       </div>
     </div>
+  );
+}
+
+function ToggleChip({
+  active, onClick, color, label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  color: string;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-xs font-medium transition ${
+        active
+          ? "border-zinc-300 bg-white text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+          : "border-dashed border-zinc-300 bg-zinc-50 text-zinc-400 line-through dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-500"
+      }`}
+    >
+      <span className={`inline-block h-2 w-2 rounded-full ${color} ${active ? "" : "opacity-40"}`} />
+      <span className="truncate">{label}</span>
+    </button>
   );
 }
 
