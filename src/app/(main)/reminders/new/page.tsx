@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { addMinutes, addHours, addDays, nextMonday, setHours, setMinutes, setSeconds, format } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspaceId } from "@/lib/workspace/hooks";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { PageHeader } from "@/components/ui/page-header";
+import { toast } from "sonner";
 
 export default function NewReminderPage() {
   const [title, setTitle] = useState("");
@@ -16,7 +18,6 @@ export default function NewReminderPage() {
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrencePattern, setRecurrencePattern] = useState("daily");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const workspaceId = useWorkspaceId();
   const supabase = createClient();
@@ -24,23 +25,22 @@ export default function NewReminderPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) {
-      setError("Title is required");
+      toast.error("Title is required");
       return;
     }
     if (!reminderTime) {
-      setError("Reminder time is required");
+      toast.error("Reminder time is required");
       return;
     }
 
     setLoading(true);
-    setError(null);
 
     try {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        setError("Not authenticated");
+        toast.error("Not authenticated");
         return;
       }
 
@@ -55,13 +55,14 @@ export default function NewReminderPage() {
       });
 
       if (insertError) {
-        setError(insertError.message);
+        toast.error(insertError.message);
         return;
       }
 
+      toast.success("Reminder created");
       router.push("/reminders");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      toast.error(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
     }
@@ -116,6 +117,31 @@ export default function NewReminderPage() {
               <label htmlFor="reminderTime" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Reminder Time *
               </label>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {(() => {
+                  const setTo = (d: Date) => {
+                    setReminderTime(`${format(d, "yyyy-MM-dd")}T${format(d, "HH:mm")}`);
+                  };
+                  const chips: { label: string; fn: () => Date }[] = [
+                    { label: "+15 min", fn: () => addMinutes(new Date(), 15) },
+                    { label: "+1 hour", fn: () => addHours(new Date(), 1) },
+                    { label: "+3 hours", fn: () => addHours(new Date(), 3) },
+                    { label: "Tomorrow 9 AM", fn: () => setSeconds(setMinutes(setHours(addDays(new Date(), 1), 9), 0), 0) },
+                    { label: "Next Monday 9 AM", fn: () => setSeconds(setMinutes(setHours(nextMonday(new Date()), 9), 0), 0) },
+                  ];
+                  return chips.map((c) => (
+                    <button
+                      key={c.label}
+                      type="button"
+                      disabled={loading}
+                      onClick={() => setTo(c.fn())}
+                      className="rounded-full border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-700 transition hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-700 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:border-indigo-500 dark:hover:bg-indigo-950/30 dark:hover:text-indigo-300"
+                    >
+                      {c.label}
+                    </button>
+                  ));
+                })()}
+              </div>
               <input
                 id="reminderTime"
                 type="datetime-local"
@@ -160,8 +186,6 @@ export default function NewReminderPage() {
                 </div>
               </div>
             )}
-
-            {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
             <div className="flex gap-4">
               <Button type="submit" disabled={loading}>

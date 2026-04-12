@@ -32,15 +32,14 @@ import {
 import { AnimatedPage } from "@/components/ui/animated-layout";
 import { CollaborationToolbar } from "@/components/collaboration/collaboration-toolbar";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { KanbanColumn, KanbanColumnOverlay } from "@/components/boards/kanban-column";
 import { KanbanCardOverlay } from "@/components/boards/kanban-card";
 import { TaskDetailModal } from "@/components/boards/task-detail-modal";
 import {
-  ArrowLeft,
   Plus,
   Loader2,
 } from "lucide-react";
-import Link from "next/link";
 import type {
   Board,
   BoardColumn,
@@ -479,27 +478,12 @@ export default function BoardDetailPage() {
   return (
     <AnimatedPage>
       <div className="space-y-4">
-        {/* Board header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link
-              href="/boards"
-              className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-                {board.name}
-              </h1>
-              {board.description && (
-                <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
-                  {board.description}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
+        <PageHeader
+          title={board.name}
+          description={board.description ?? undefined}
+          backHref="/boards"
+          backLabel="Back to Boards"
+        />
 
         <CollaborationToolbar
           entityType="board"

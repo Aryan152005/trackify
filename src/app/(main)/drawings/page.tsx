@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/animated-layout";
 import { Plus, Pencil } from "lucide-react";
 import { createDrawing } from "@/lib/drawings/actions";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export default async function DrawingsPage() {
   const supabase = await createClient();
@@ -98,25 +99,18 @@ export default async function DrawingsPage() {
             </div>
           </AnimatedList>
         ) : (
-          /* Empty state */
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-16">
-              <Pencil className="mb-4 h-12 w-12 text-zinc-300 dark:text-zinc-600" />
-              <h3 className="mb-1 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-                No drawings yet
-              </h3>
-              <p className="mb-6 text-sm text-zinc-500 dark:text-zinc-400">
-                Create your first drawing to start sketching and collaborating
-                visually.
-              </p>
-              <form action={handleCreate}>
-                <Button type="submit">
-                  <Plus className="mr-2 h-4 w-4" />
-                  New Drawing
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+          <EmptyState
+            icon={<Pencil className="h-6 w-6" />}
+            title="No drawings yet"
+            description="Create your first drawing to start sketching and collaborating visually."
+          >
+            <form action={handleCreate} className="mt-2">
+              <Button type="submit" size="sm">
+                <Plus className="mr-2 h-4 w-4" />
+                New Drawing
+              </Button>
+            </form>
+          </EmptyState>
         )}
       </div>
     </AnimatedPage>

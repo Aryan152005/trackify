@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { AnimatedPage } from "@/components/ui/animated-layout";
 import { Plus, LayoutDashboard, Columns3 } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export default async function BoardsPage() {
   const supabase = await createClient();
@@ -103,25 +104,13 @@ export default async function BoardsPage() {
             })}
           </div>
         ) : (
-          /* Empty state */
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-16">
-              <LayoutDashboard className="mb-4 h-12 w-12 text-zinc-300 dark:text-zinc-600" />
-              <h3 className="mb-1 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-                No boards yet
-              </h3>
-              <p className="mb-6 text-sm text-zinc-500 dark:text-zinc-400">
-                Create your first Kanban board to start organizing tasks
-                visually.
-              </p>
-              <Link href="/boards/new">
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Board
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
+          <EmptyState
+            icon={<Columns3 className="h-6 w-6" />}
+            title="No boards yet"
+            description="Create your first Kanban board to start organizing tasks visually."
+            actionLabel="Create Board"
+            actionHref="/boards/new"
+          />
         )}
       </div>
     </AnimatedPage>

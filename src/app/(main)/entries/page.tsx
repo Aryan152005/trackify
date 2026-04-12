@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveWorkspaceId } from "@/lib/workspace/actions";
 import Link from "next/link";
 import { format } from "date-fns";
+import { FileText } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export default async function EntriesPage() {
   const supabase = await createClient();
@@ -124,15 +126,13 @@ export default async function EntriesPage() {
           </table>
         </div>
       ) : (
-        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-12 text-center dark:border-zinc-800 dark:bg-zinc-800/30">
-          <p className="text-zinc-600 dark:text-zinc-400">No entries yet.</p>
-          <Link
-            href="/entries/new"
-            className="mt-4 inline-block text-indigo-600 hover:underline dark:text-indigo-400"
-          >
-            Add your first entry
-          </Link>
-        </div>
+        <EmptyState
+          icon={<FileText className="h-6 w-6" />}
+          title="No entries yet"
+          description="Start logging your daily work to build momentum and see your progress."
+          actionLabel="Add entry"
+          actionHref="/entries/new"
+        />
       )}
     </div>
   );

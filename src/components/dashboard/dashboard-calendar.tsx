@@ -8,6 +8,7 @@ import {
 import { ChevronLeft, ChevronRight, CheckSquare, Bell, FileText } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/lib/hooks/use-media-query";
 import Link from "next/link";
 
 interface DayTask { id: string; title: string; due_date: string; due_time: string | null; priority: string | null; status: string }
@@ -23,6 +24,7 @@ interface Props {
 export function DashboardCalendar({ tasks, reminders, entries }: Props) {
   const [cursor, setCursor] = useState(() => new Date());
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  const isMobile = useIsMobile();
 
   // Pre-bucket items by YYYY-MM-DD
   const byDate = useMemo(() => {
@@ -68,6 +70,73 @@ export function DashboardCalendar({ tasks, reminders, entries }: Props) {
         </div>
       </CardHeader>
       <CardContent>
+        {isMobile ? (
+          (() => {
+            const monthStart = startOfMonth(cursor);
+            const monthEnd = endOfMonth(cursor);
+            const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
+            const activeDays = monthDays.filter((d) => {
+              const data = byDate.get(format(d, "yyyy-MM-dd"));
+              return !!(data && (data.tasks.length || data.reminders.length || data.entries.length));
+            });
+            if (activeDays.length === 0) {
+              return (
+                <p className="py-8 text-center text-sm text-zinc-400">No scheduled items this month</p>
+              );
+            }
+            return (
+              <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                {activeDays.map((day) => {
+                  const key = format(day, "yyyy-MM-dd");
+                  const data = byDate.get(key)!;
+                  const total = data.tasks.length + data.reminders.length + data.entries.length;
+                  const overdueTasks = data.tasks.filter((t) => t.status !== "done" && parseISO(t.due_date) < new Date() && !isSameDay(parseISO(t.due_date), new Date())).length;
+                  const titles: string[] = [
+                    ...data.tasks.slice(0, 2).map((t) => t.title),
+                    ...data.reminders.slice(0, 2).map((r) => r.title),
+                    ...data.entries.slice(0, 2).map((e) => e.title),
+                  ].slice(0, 2);
+                  return (
+                    <li key={key}>
+                      <Link
+                        href={`/calendar?date=${key}`}
+                        className={`flex items-center gap-3 px-1 py-2.5 transition hover:bg-zinc-50 dark:hover:bg-zinc-800/50 ${isToday(day) ? "bg-indigo-50/50 dark:bg-indigo-950/20" : ""}`}
+                      >
+                        <div className="w-16 shrink-0">
+                          <div className={`text-sm font-semibold ${isToday(day) ? "text-indigo-600 dark:text-indigo-400" : "text-zinc-900 dark:text-zinc-100"}`}>
+                            {format(day, "EEE d")}
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          {data.tasks.length > 0 && (
+                            <span className={`inline-block h-2 w-2 rounded-full ${overdueTasks > 0 ? "bg-red-500" : "bg-indigo-500"}`} />
+                          )}
+                          {data.reminders.length > 0 && (
+                            <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+                          )}
+                          {data.entries.length > 0 && (
+                            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          {titles.length > 0 && (
+                            <p className="truncate text-xs text-zinc-600 dark:text-zinc-400">
+                              {titles.join(" · ")}
+                            </p>
+                          )}
+                        </div>
+                        <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                          {total}
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            );
+          })()
+        ) : (
+          <>
         {/* Weekday headers */}
         <div className="mb-1 grid grid-cols-7 gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
           {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
@@ -101,6 +170,8 @@ export function DashboardCalendar({ tasks, reminders, entries }: Props) {
             );
           })}
         </div>
+          </>
+        )}
 
         {/* Legend */}
         <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-zinc-100 pt-2.5 text-[10px] text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">

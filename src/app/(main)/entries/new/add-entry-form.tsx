@@ -11,7 +11,7 @@ import {
   Briefcase, Lightbulb, ArrowRight, Smile, Gauge, TagIcon, Loader2,
 } from "lucide-react";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Alert } from "@/components/ui/alert";
+import { toast } from "sonner";
 
 const BUCKET = "entry-attachments";
 const MAX_IMAGES = 5;
@@ -35,7 +35,6 @@ export function AddEntryForm({ userId, tags }: AddEntryFormProps) {
   const router = useRouter();
   const workspaceId = useWorkspaceId();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<WorkEntryStatus>("done");
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
@@ -48,25 +47,24 @@ export function AddEntryForm({ userId, tags }: AddEntryFormProps) {
     const files = Array.from(e.target.files || []);
     const validFiles = files.filter((file) => {
       if (!file.type.startsWith("image/")) {
-        setError("Only image files are allowed");
+        toast.error("Only image files are allowed");
         return false;
       }
       if (file.size > MAX_FILE_SIZE) {
-        setError(`File ${file.name} exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit`);
+        toast.error(`File ${file.name} exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit`);
         return false;
       }
       return true;
     });
 
     if (selectedImages.length + validFiles.length > MAX_IMAGES) {
-      setError(`Maximum ${MAX_IMAGES} images allowed`);
+      toast.error(`Maximum ${MAX_IMAGES} images allowed`);
       return;
     }
 
     const newImages = [...selectedImages, ...validFiles];
     setSelectedImages(newImages);
     setImagePreviews(newImages.map((file) => URL.createObjectURL(file)));
-    setError(null);
   }
 
   function removeImage(index: number) {
@@ -88,7 +86,6 @@ export function AddEntryForm({ userId, tags }: AddEntryFormProps) {
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError(null);
     setLoading(true);
 
     const form = e.currentTarget;
@@ -127,7 +124,7 @@ export function AddEntryForm({ userId, tags }: AddEntryFormProps) {
       .single();
 
     if (insertError) {
-      setError(insertError.message);
+      toast.error(insertError.message);
       setLoading(false);
       return;
     }
@@ -152,11 +149,12 @@ export function AddEntryForm({ userId, tags }: AddEntryFormProps) {
         const attachments = await Promise.all(uploadPromises);
         await supabase.from("attachments").insert(attachments);
       } catch {
-        setError("Entry saved but some images failed to upload");
+        toast.error("Entry saved but some images failed to upload");
       }
     }
 
     imagePreviews.forEach((url) => URL.revokeObjectURL(url));
+    toast.success("Entry saved");
     setLoading(false);
     router.push("/entries");
     router.refresh();
@@ -164,8 +162,6 @@ export function AddEntryForm({ userId, tags }: AddEntryFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 pb-24">
-      {error && <Alert type="error">{error}</Alert>}
-
       {/* ────── Section 1: Essentials ────── */}
       <Section
         title="Essentials"

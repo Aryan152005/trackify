@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/providers";
 import { PwaRegistrar } from "@/components/pwa-registrar";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 const inter = Inter({
@@ -48,6 +49,16 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           {children}
           <PwaRegistrar />
+          <Toaster
+            position="top-right"
+            richColors
+            closeButton
+            theme="system"
+            toastOptions={{
+              className: "font-sans",
+              duration: 4000,
+            }}
+          />
         </ThemeProvider>
       </body>
     </html>

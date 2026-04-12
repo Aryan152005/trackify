@@ -6,7 +6,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Alert } from "@/components/ui/alert";
+import { toast } from "sonner";
 import { AdminCharts } from "@/components/admin/admin-charts";
 import { addToWhitelist, removeFromWhitelist, approveWhitelistRequest } from "@/lib/admin/email-actions";
 import { updateFeedbackStatus } from "@/lib/feedback/actions";
@@ -66,11 +66,9 @@ export function AdminTabs({ users, whitelist: initialWhitelist, whitelistRequest
   // Whitelist state
   const [newEmail, setNewEmail] = useState("");
   const [addingEmail, setAddingEmail] = useState(false);
-  const [whitelistMsg, setWhitelistMsg] = useState<{ type: "success" | "warn" | "error"; text: string } | null>(null);
 
   // Actions
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [requestMsg, setRequestMsg] = useState<{ type: "success" | "warn" | "error"; text: string } | null>(null);
 
   // Preview dialog state
   const [previewPayload, setPreviewPayload] = useState<RenderedEmail | null>(null);
@@ -96,10 +94,7 @@ export function AdminTabs({ users, whitelist: initialWhitelist, whitelistRequest
       const rendered = await renderWhitelistApproved(email, name);
       setPreviewPayload(rendered);
     } catch (err) {
-      setWhitelistMsg({
-        type: "error",
-        text: err instanceof Error ? err.message : "Failed to render preview",
-      });
+      toast.error(err instanceof Error ? err.message : "Failed to render preview");
     }
   }
 
@@ -111,57 +106,40 @@ export function AdminTabs({ users, whitelist: initialWhitelist, whitelistRequest
     e.preventDefault();
     if (!newEmail.trim()) return;
     setAddingEmail(true);
-    setWhitelistMsg(null);
     try {
       const result = await addToWhitelist(newEmail);
       setWhitelist((prev) => [{ email: result.email, created_at: new Date().toISOString() }, ...prev]);
       setNewEmail("");
-      setWhitelistMsg({
-        type: "success",
-        text: `Whitelisted ${result.email}. Opening invite email preview so you can copy and send it.`,
-      });
+      toast.success(`Whitelisted ${result.email}. Opening invite email preview so you can copy and send it.`);
       openWhitelistPreview(result.email);
     } catch (err) {
-      setWhitelistMsg({
-        type: "error",
-        text: err instanceof Error ? err.message : "Failed to add to whitelist",
-      });
+      toast.error(err instanceof Error ? err.message : "Failed to add to whitelist");
     }
     setAddingEmail(false);
   }
 
   async function handleRemoveWhitelist(email: string) {
     setActionLoading(email);
-    setWhitelistMsg(null);
     try {
       await removeFromWhitelist(email);
       setWhitelist((prev) => prev.filter((w) => w.email !== email));
+      toast.success(`Removed ${email} from whitelist`);
     } catch (err) {
-      setWhitelistMsg({
-        type: "error",
-        text: err instanceof Error ? err.message : "Failed to remove",
-      });
+      toast.error(err instanceof Error ? err.message : "Failed to remove");
     }
     setActionLoading(null);
   }
 
   async function handleApproveRequest(requestId: string) {
     setActionLoading(requestId);
-    setRequestMsg(null);
     try {
       const result = await approveWhitelistRequest(requestId);
       setRequests((prev) => prev.map((r) => r.id === requestId ? { ...r, status: "approved" } : r));
       setWhitelist((prev) => [{ email: result.email, created_at: new Date().toISOString() }, ...prev]);
-      setRequestMsg({
-        type: "success",
-        text: `Approved ${result.email}. Opening invite email preview so you can send it manually.`,
-      });
+      toast.success(`Approved ${result.email}. Opening invite email preview so you can send it manually.`);
       openWhitelistPreview(result.email, result.name ?? "");
     } catch (err) {
-      setRequestMsg({
-        type: "error",
-        text: err instanceof Error ? err.message : "Failed to approve",
-      });
+      toast.error(err instanceof Error ? err.message : "Failed to approve");
     }
     setActionLoading(null);
   }
@@ -285,7 +263,6 @@ export function AdminTabs({ users, whitelist: initialWhitelist, whitelistRequest
       {/* Whitelist Tab */}
       {tab === "whitelist" && (
         <div className="space-y-6">
-          {whitelistMsg && <Alert type={whitelistMsg.type}>{whitelistMsg.text}</Alert>}
           <Card>
             <CardHeader>
               <CardTitle>Add to Whitelist</CardTitle>
@@ -359,7 +336,6 @@ export function AdminTabs({ users, whitelist: initialWhitelist, whitelistRequest
       {/* Access Requests Tab */}
       {tab === "requests" && (
         <div className="space-y-4">
-          {requestMsg && <Alert type={requestMsg.type}>{requestMsg.text}</Alert>}
         <Card>
           <CardHeader>
             <CardTitle>Access Requests</CardTitle>

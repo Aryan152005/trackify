@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { useWorkspaceId } from "@/lib/workspace/hooks";
 import { createBoard } from "@/lib/boards/actions";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { AnimatedPage } from "@/components/ui/animated-layout";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
+import { Loader2 } from "lucide-react";
 import Link from "next/link";
 
 export default function NewBoardPage() {
@@ -49,20 +50,14 @@ export default function NewBoardPage() {
   return (
     <AnimatedPage>
       <div className="mx-auto max-w-lg space-y-6">
-        {/* Back link */}
-        <Link
-          href="/boards"
-          className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Boards
-        </Link>
+        <PageHeader
+          title="Create New Board"
+          backHref="/boards"
+          backLabel="Back to Boards"
+        />
 
         <Card>
-          <CardHeader>
-            <CardTitle>Create New Board</CardTitle>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Name */}
               <div>

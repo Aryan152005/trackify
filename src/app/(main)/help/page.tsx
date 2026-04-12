@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -9,52 +10,59 @@ import {
   Keyboard, HelpCircle, Sparkles, Mail, Activity, Rocket,
 } from "lucide-react";
 
-const guides = [
+type Guide = {
+  icon: typeof FileText;
+  title: string;
+  steps: string[];
+  tryUrl?: string;
+};
+
+const guides: { category: string; items: Guide[] }[] = [
   {
     category: "Getting Started",
     items: [
-      { icon: FileText, title: "Log Your Work", steps: ["Go to Entries > + New Entry", "Fill in what you worked on, hours, and a productivity score", "Add tags to categorize your work", "Upload photos as proof if needed"] },
-      { icon: CheckSquare, title: "Create Tasks", steps: ["Go to Tasks > New Task", "Set a title, priority (low/medium/high/urgent), and due date", "Track status: pending > in-progress > done", "View tasks on Kanban boards for a visual overview"] },
-      { icon: StickyNote, title: "Write Notes", steps: ["Go to Notes > + New Page", "Use the rich editor — type / for block commands", "Add headings, lists, checkboxes, code blocks, and more", "Notes auto-save as you type"] },
+      { icon: FileText, title: "Log Your Work", tryUrl: "/entries/new", steps: ["Go to Entries > + New Entry", "Fill in what you worked on, hours, and a productivity score", "Add tags to categorize your work", "Upload photos as proof if needed"] },
+      { icon: CheckSquare, title: "Create Tasks", tryUrl: "/tasks/new", steps: ["Go to Tasks > New Task", "Set a title, priority (low/medium/high/urgent), and due date", "Track status: pending > in-progress > done", "View tasks on Kanban boards for a visual overview"] },
+      { icon: StickyNote, title: "Write Notes", tryUrl: "/notes", steps: ["Go to Notes > + New Page", "Use the rich editor — type / for block commands", "Add headings, lists, checkboxes, code blocks, and more", "Notes auto-save as you type"] },
     ],
   },
   {
     category: "Organize & Visualize",
     items: [
-      { icon: Columns3, title: "Kanban Boards", steps: ["Go to Boards > Create Board", "Add columns (e.g. To Do, In Progress, Done)", "Create task cards in each column", "Drag and drop to move tasks between columns"] },
-      { icon: Brain, title: "Mind Maps", steps: ["Go to Mind Maps > New Mind Map", "Click 'Add Node' to create ideas", "Drag between nodes to create connections", "Use Auto Layout to organize the view"] },
-      { icon: Calendar, title: "Calendar & Reminders", steps: ["Calendar shows all your events, deadlines, and reminders", "Click + Add Event to create new events", "Set reminders with notification times", "Reminders send push notifications to your phone"] },
+      { icon: Columns3, title: "Kanban Boards", tryUrl: "/boards", steps: ["Go to Boards > Create Board", "Add columns (e.g. To Do, In Progress, Done)", "Create task cards in each column", "Drag and drop to move tasks between columns"] },
+      { icon: Brain, title: "Mind Maps", tryUrl: "/mindmaps", steps: ["Go to Mind Maps > New Mind Map", "Click 'Add Node' to create ideas", "Drag between nodes to create connections", "Use Auto Layout to organize the view"] },
+      { icon: Calendar, title: "Calendar & Reminders", tryUrl: "/calendar", steps: ["Calendar shows all your events, deadlines, and reminders", "Click + Add Event to create new events", "Set reminders with notification times", "Reminders send push notifications to your phone"] },
     ],
   },
   {
     category: "Collaborate",
     items: [
-      { icon: Users, title: "Share & Comment", steps: ["Open any page, board, or drawing", "Click the Share button in the toolbar", "Choose permission level: view, comment, or edit", "Copy the link and send it to teammates"] },
-      { icon: Bell, title: "Mentions & Notifications", steps: ["In any comment, type @ to mention a teammate", "They'll get a notification in their mentions popover", "Click the bell icon in the nav to see notifications", "Reminders also send push notifications to your phone"] },
-      { icon: Shield, title: "Workspace & Members", steps: ["Go to Workspace Settings > Members", "Invite team members by email", "Assign roles: viewer, editor, or admin", "Each role has different permissions"] },
+      { icon: Users, title: "Share & Comment", tryUrl: "/workspace/members", steps: ["Open any page, board, or drawing", "Click the Share button in the toolbar", "Choose permission level: view, comment, or edit", "Copy the link and send it to teammates"] },
+      { icon: Bell, title: "Mentions & Notifications", tryUrl: "/notifications", steps: ["In any comment, type @ to mention a teammate", "They'll get a notification in their mentions popover", "Click the bell icon in the nav to see notifications", "Reminders also send push notifications to your phone"] },
+      { icon: Shield, title: "Workspace & Members", tryUrl: "/workspace/members", steps: ["Go to Workspace Settings > Members", "Invite team members by email", "Assign roles: viewer, editor, or admin", "Each role has different permissions"] },
     ],
   },
   {
     category: "Analyze & Export",
     items: [
-      { icon: BarChart3, title: "Analytics", steps: ["Go to Analytics for charts and insights", "See productivity trends, task completion rates", "Track time distribution across tags", "View heatmaps of your most active days"] },
-      { icon: FileDown, title: "Reports", steps: ["Go to Reports to generate exports", "Select a date range", "Export as PDF, Word (DOCX), or Excel", "Reports include all entries, stats, and summaries"] },
+      { icon: BarChart3, title: "Analytics", tryUrl: "/analytics", steps: ["Go to Analytics for charts and insights", "See productivity trends, task completion rates", "Track time distribution across tags", "View heatmaps of your most active days"] },
+      { icon: FileDown, title: "Reports", tryUrl: "/reports", steps: ["Go to Reports to generate exports", "Select a date range", "Export as PDF, Word (DOCX), or Excel", "Reports include all entries, stats, and summaries"] },
     ],
   },
   {
     category: "Smart & Automated",
     items: [
-      { icon: Sparkles, title: "Smart Mindmap", steps: ["Open Mind Maps > Smart Mindmap", "Auto-generated from your tasks, reminders, entries, notes", "Hover a node to dim others; see only its connections", "Click a suggestion to auto-link related items (set due date, create reminder, etc.)"] },
-      { icon: Bell, title: "Push Notifications", steps: ["Click Enable notifications in the banner at the top, OR go to Reminders", "Grant browser permission when asked", "Repeat on each device (laptop, phone, tablet)", "Reminders fire on ALL your devices even when the app is closed"] },
-      { icon: Activity, title: "Admin · System Logs", steps: ["Admins only: go to Admin > System Logs", "Filter by service, level (error/warn/info), tag, time range, or search", "CSV export of any filtered view", "Live tail toggle streams events in realtime"] },
+      { icon: Sparkles, title: "Smart Mindmap", tryUrl: "/mindmaps/smart", steps: ["Open Mind Maps > Smart Mindmap", "Auto-generated from your tasks, reminders, entries, notes", "Hover a node to dim others; see only its connections", "Click a suggestion to auto-link related items (set due date, create reminder, etc.)"] },
+      { icon: Bell, title: "Push Notifications", tryUrl: "/reminders", steps: ["Click Enable notifications in the banner at the top, OR go to Reminders", "Grant browser permission when asked", "Repeat on each device (laptop, phone, tablet)", "Reminders fire on ALL your devices even when the app is closed"] },
+      { icon: Activity, title: "Admin · System Logs", tryUrl: "/admin/logs", steps: ["Admins only: go to Admin > System Logs", "Filter by service, level (error/warn/info), tag, time range, or search", "CSV export of any filtered view", "Live tail toggle streams events in realtime"] },
     ],
   },
   {
     category: "Pro Tips",
     items: [
       { icon: Keyboard, title: "Keyboard Shortcuts", steps: ["Press Cmd/Ctrl + K to open the command palette", "Search for any page, task, or board instantly", "Use Ctrl+Enter to submit comments", "Press / in the notes editor for block commands"] },
-      { icon: Pencil, title: "Drawings", steps: ["Go to Drawings to create freeform canvases", "Excalidraw-powered: shapes, arrows, text, colors, freehand", "Great for diagrams, wireframes, sketches", "Auto-saves as you draw"] },
-      { icon: Mail, title: "Manual Email Sending", steps: ["Open any Whitelist entry or Invite > Preview", "Click Copy HTML — preserves logo, buttons, design", "Paste into Gmail / Outlook / Apple Mail compose", "Subject and recipient have their own Copy buttons"] },
+      { icon: Pencil, title: "Drawings", tryUrl: "/drawings", steps: ["Go to Drawings to create freeform canvases", "Excalidraw-powered: shapes, arrows, text, colors, freehand", "Great for diagrams, wireframes, sketches", "Auto-saves as you draw"] },
+      { icon: Mail, title: "Manual Email Sending", tryUrl: "/admin", steps: ["Open any Whitelist entry or Invite > Preview", "Click Copy HTML — preserves logo, buttons, design", "Paste into Gmail / Outlook / Apple Mail compose", "Subject and recipient have their own Copy buttons"] },
     ],
   },
 ];
@@ -127,6 +135,11 @@ export default function HelpPage() {
                       </li>
                     ))}
                   </ol>
+                  {item.tryUrl && (
+                    <Link href={item.tryUrl} className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400">
+                      Open →
+                    </Link>
+                  )}
                 </CardContent>
               </Card>
             ))}

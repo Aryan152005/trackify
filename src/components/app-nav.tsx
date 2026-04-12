@@ -1,14 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { toast } from "sonner";
 import { UserNavInfo } from "@/components/user-nav-info";
 import { MobileNav } from "@/components/mobile-nav";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { MentionsPopover } from "@/components/collaboration/mentions-popover";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import dynamic from "next/dynamic";
 import {
@@ -67,15 +71,21 @@ export const navItems = primaryNav;
 export function AppNav({ isAdmin = false }: { isAdmin?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [logoutOpen, setLogoutOpen] = useState(false);
   const moreNavWithAdmin = isAdmin
     ? [{ href: "/admin", label: "Admin", icon: Shield }, ...moreNav]
     : moreNav;
 
-  async function handleSignOut() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
+  async function doSignOut() {
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      toast.success("Logged out. See you soon.");
+      router.push("/login");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Logout failed");
+    }
   }
 
   const isMoreActive = moreNavWithAdmin.some(
@@ -164,6 +174,7 @@ export function AppNav({ isAdmin = false }: { isAdmin?: boolean }) {
         </nav>
         {/* Right: utility icons + user */}
         <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+          <ThemeToggle />
           <NotificationBell />
           <MentionsPopover />
           <div className="hidden lg:block">
@@ -171,14 +182,25 @@ export function AppNav({ isAdmin = false }: { isAdmin?: boolean }) {
           </div>
           <button
             type="button"
-            onClick={handleSignOut}
+            onClick={() => setLogoutOpen(true)}
             className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
             aria-label="Sign out"
+            title="Sign out"
           >
             <LogOut className="h-4 w-4" />
           </button>
         </div>
       </div>
+      <ConfirmDialog
+        open={logoutOpen}
+        onOpenChange={setLogoutOpen}
+        title="Log out of Trackify?"
+        description="You'll be signed out on this device. You can sign back in anytime with the same email and password."
+        confirmLabel="Log out"
+        cancelLabel="Stay signed in"
+        variant="danger"
+        onConfirm={doSignOut}
+      />
     </header>
   );
 }

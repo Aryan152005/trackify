@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Eye, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import {
   renderTemplatePreview,
   type TemplateId,
@@ -50,7 +51,6 @@ export function BroadcastComposer({ previewRecipient, onPreview }: Props) {
     inviteCtaUrl: "",
   });
   const [loadingPreview, setLoadingPreview] = useState(false);
-  const [result, setResult] = useState<{ type: "success" | "warn" | "error"; text: string } | null>(null);
 
   function setField(key: string, value: string) {
     setFields((prev) => ({ ...prev, [key]: value }));
@@ -92,15 +92,11 @@ export function BroadcastComposer({ previewRecipient, onPreview }: Props) {
   async function handlePreview() {
     if (!filled) return;
     setLoadingPreview(true);
-    setResult(null);
     try {
       const rendered = await renderTemplatePreview(templateId, filled, previewRecipient);
       onPreview(rendered, templateId);
     } catch (err) {
-      setResult({
-        type: "error",
-        text: err instanceof Error ? err.message : "Failed to render preview",
-      });
+      toast.error(err instanceof Error ? err.message : "Failed to render preview");
     }
     setLoadingPreview(false);
   }
@@ -177,8 +173,6 @@ export function BroadcastComposer({ previewRecipient, onPreview }: Props) {
           {templateId === "welcome" && (
             <TextField label="Recipient Name" value={fields.name} onChange={(v) => setField("name", v)} placeholder="Alex" />
           )}
-
-          {result && <Alert type={result.type}>{result.text}</Alert>}
 
           <div className="flex justify-end">
             <Button type="button" disabled={!canPreview || loadingPreview} onClick={handlePreview}>

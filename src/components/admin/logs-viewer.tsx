@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -39,14 +40,24 @@ const PAGE_SIZE = 100;
 
 export function LogsViewer({ initialPage, initialSummary, initialSince }: Props) {
   const isMobile = useIsMobile();
-  const [range, setRange] = useState<Range>("24h");
-  const [source, setSource] = useState<LogSource | "all">("all");
-  const [service, setService] = useState<string>(ANY);
-  const [level, setLevel] = useState<string>(ANY);
-  const [tag, setTag] = useState<string>(ANY);
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [offset, setOffset] = useState(0);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const sp = (k: string) => searchParams?.get(k) ?? null;
+  const initRange = (sp("range") as Range | null) ?? "24h";
+  const initSource = (sp("source") as LogSource | "all" | null) ?? "all";
+  const initService = sp("service") ?? ANY;
+  const initLevel = sp("level") ?? ANY;
+  const initTag = sp("tag") ?? ANY;
+  const initSearchStr = sp("search") ?? "";
+  const initOffset = Number(sp("offset") ?? 0) || 0;
+  const [range, setRange] = useState<Range>(initRange);
+  const [source, setSource] = useState<LogSource | "all">(initSource);
+  const [service, setService] = useState<string>(initService);
+  const [level, setLevel] = useState<string>(initLevel);
+  const [tag, setTag] = useState<string>(initTag);
+  const [search, setSearch] = useState(initSearchStr);
+  const [debouncedSearch, setDebouncedSearch] = useState(initSearchStr);
+  const [offset, setOffset] = useState(initOffset);
   const [page, setPage] = useState<LogsPage>(initialPage);
   const [summary, setSummary] = useState<LogsSummary>(initialSummary);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -61,6 +72,20 @@ export function LogsViewer({ initialPage, initialSummary, initialSince }: Props)
     const h = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(h);
   }, [search]);
+
+  // Sync filters -> URL query params
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (range !== "24h") params.set("range", range);
+    if (source !== "all") params.set("source", source);
+    if (service !== ANY) params.set("service", service);
+    if (level !== ANY) params.set("level", level);
+    if (tag !== ANY) params.set("tag", tag);
+    if (debouncedSearch) params.set("search", debouncedSearch);
+    if (offset !== 0) params.set("offset", String(offset));
+    const qs = params.toString();
+    router.replace(qs ? `?${qs}` : "?", { scroll: false });
+  }, [range, source, service, level, tag, debouncedSearch, offset, router]);
 
   const since = useMemo(
     () => new Date(Date.now() - RANGE_MS[range]).toISOString(),

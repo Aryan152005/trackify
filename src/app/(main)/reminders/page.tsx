@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { PushSettings } from "@/components/push/push-settings";
 import { Plus, Bell } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export default async function RemindersPage() {
   const supabase = await createClient();
@@ -56,6 +57,16 @@ export default async function RemindersPage() {
 
       <PushSettings publicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ""} />
 
+      {upcoming.length === 0 && past.length === 0 ? (
+        <EmptyState
+          icon={<Bell className="h-6 w-6" />}
+          title="No reminders yet"
+          description="Set your first reminder so nothing slips through the cracks."
+          actionLabel="New Reminder"
+          actionHref="/reminders/new"
+        />
+      ) : (
+      <>
       {/* Upcoming Reminders */}
       <Card>
         <CardHeader>
@@ -123,6 +134,8 @@ export default async function RemindersPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+      </>
       )}
     </div>
   );

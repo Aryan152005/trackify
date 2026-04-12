@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import type { TaskPriority } from "@/lib/types/database";
+import { toast } from "sonner";
 
 export default function NewTaskPage() {
   const [title, setTitle] = useState("");
@@ -17,7 +18,6 @@ export default function NewTaskPage() {
   const [dueTime, setDueTime] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const workspaceId = useWorkspaceId();
   const supabase = createClient();
@@ -25,19 +25,18 @@ export default function NewTaskPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) {
-      setError("Title is required");
+      toast.error("Title is required");
       return;
     }
 
     setLoading(true);
-    setError(null);
 
     try {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        setError("Not authenticated");
+        toast.error("Not authenticated");
         return;
       }
 
@@ -53,13 +52,14 @@ export default function NewTaskPage() {
       });
 
       if (insertError) {
-        setError(insertError.message);
+        toast.error(insertError.message);
         return;
       }
 
+      toast.success("Task created");
       router.push("/tasks");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      toast.error(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
     }
@@ -159,8 +159,6 @@ export default function NewTaskPage() {
                 </Select>
               </div>
             </div>
-
-            {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
             <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end sm:gap-3">
               <Button

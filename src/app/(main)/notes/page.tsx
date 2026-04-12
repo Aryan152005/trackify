@@ -10,7 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { AnimatedPage, AnimatedList, AnimatedItem } from "@/components/ui/animated-layout";
-import { Plus, FileText } from "lucide-react";
+import { Plus, FileText, StickyNote } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export default async function NotesPage() {
   const supabase = await createClient();
@@ -89,25 +90,13 @@ export default async function NotesPage() {
             </div>
           </AnimatedList>
         ) : (
-          /* Empty state */
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-16">
-              <FileText className="mb-4 h-12 w-12 text-zinc-300 dark:text-zinc-600" />
-              <h3 className="mb-1 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-                No pages yet
-              </h3>
-              <p className="mb-6 text-sm text-zinc-500 dark:text-zinc-400">
-                Create your first page to start writing and organizing your
-                notes.
-              </p>
-              <Link href="/notes/new">
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  New Page
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
+          <EmptyState
+            icon={<StickyNote className="h-6 w-6" />}
+            title="No pages yet"
+            description="Create your first page to start writing and organizing your notes."
+            actionLabel="New Page"
+            actionHref="/notes/new"
+          />
         )}
       </div>
     </AnimatedPage>

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Eye, Loader2, X, Copy, Check } from "lucide-react";
+import { toast } from "sonner";
 import {
   renderTemplatePreview,
   type TemplateId,
@@ -51,7 +52,6 @@ export function TargetedEmailComposer({ selected, onPreview, onClear, onDeselect
   });
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [copiedRecipients, setCopiedRecipients] = useState(false);
-  const [result, setResult] = useState<{ type: "success" | "warn" | "error"; text: string } | null>(null);
 
   function setField(key: string, value: string) {
     setFields((prev) => ({ ...prev, [key]: value }));
@@ -94,13 +94,12 @@ export function TargetedEmailComposer({ selected, onPreview, onClear, onDeselect
   async function handlePreview() {
     if (!filled) return;
     setLoadingPreview(true);
-    setResult(null);
     try {
       // Preview rendered for the first selected user (same HTML sent via BCC to all)
       const rendered = await renderTemplatePreview(templateId, filled, selected[0].email);
       onPreview(rendered);
     } catch (err) {
-      setResult({ type: "error", text: err instanceof Error ? err.message : "Preview failed" });
+      toast.error(err instanceof Error ? err.message : "Preview failed");
     }
     setLoadingPreview(false);
   }
@@ -111,7 +110,7 @@ export function TargetedEmailComposer({ selected, onPreview, onClear, onDeselect
       setCopiedRecipients(true);
       setTimeout(() => setCopiedRecipients(false), 2000);
     } catch {
-      setResult({ type: "error", text: "Clipboard blocked. Copy the emails manually from the chips above." });
+      toast.error("Clipboard blocked. Copy the emails manually from the chips above.");
     }
   }
 
@@ -217,8 +216,6 @@ export function TargetedEmailComposer({ selected, onPreview, onClear, onDeselect
             <TextArea label="Details" value={fields.details} onChange={(v) => setField("details", v)} rows={3} />
           </>
         )}
-
-        {result && <Alert type={result.type}>{result.text}</Alert>}
 
         <div className="flex justify-end">
           <Button type="button" disabled={!canPreview || loadingPreview} onClick={handlePreview}>

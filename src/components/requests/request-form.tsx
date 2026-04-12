@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Send, X } from "lucide-react";
 import type { RequestType } from "@/lib/types/notification";
+import { toast } from "sonner";
 
 interface RequestFormProps {
   workspaceId: string;
@@ -44,15 +45,13 @@ export function RequestForm({
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!toUserId || !title.trim()) {
-      setError("Recipient and title are required.");
+      toast.error("Recipient and title are required.");
       return;
     }
-    setError("");
     setSubmitting(true);
     try {
       await onSubmit({
@@ -62,8 +61,9 @@ export function RequestForm({
         description: description.trim() || undefined,
         due_date: dueDate || undefined,
       });
+      toast.success("Request sent");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create request");
+      toast.error(err instanceof Error ? err.message : "Failed to create request");
     } finally {
       setSubmitting(false);
     }
@@ -174,11 +174,6 @@ export function RequestForm({
               className={inputClasses}
             />
           </div>
-
-          {/* Error */}
-          {error && (
-            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-          )}
 
           {/* Actions */}
           <div className="flex items-center justify-end gap-2 pt-2">

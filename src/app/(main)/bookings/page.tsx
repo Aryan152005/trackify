@@ -19,6 +19,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BookingForm } from "@/components/bookings/booking-form";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Ticket } from "lucide-react";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { PageHeader } from "@/components/ui/page-header";
 import {
@@ -306,17 +308,13 @@ export default function BookingsPage() {
               <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
             </div>
           ) : resources.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <Building2 className="mb-3 h-10 w-10 text-zinc-300 dark:text-zinc-600" />
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                  No resources yet.{" "}
-                  {isAdmin
-                    ? "Add a resource to get started."
-                    : "Ask an admin to add resources."}
-                </p>
-              </CardContent>
-            </Card>
+            <EmptyState
+              icon={<Building2 className="h-6 w-6" />}
+              title="No resources yet"
+              description={isAdmin ? "Add a resource to get started." : "Ask an admin to add resources."}
+              actionLabel={isAdmin ? "Add Resource" : undefined}
+              onAction={isAdmin ? () => setShowResourceForm(true) : undefined}
+            />
           ) : (
             <AnimatedList>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -434,14 +432,13 @@ export default function BookingsPage() {
               <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
             </div>
           ) : filteredBookings.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <CalendarRange className="mb-3 h-10 w-10 text-zinc-300 dark:text-zinc-600" />
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                  No bookings found. Book a resource to get started.
-                </p>
-              </CardContent>
-            </Card>
+            <EmptyState
+              icon={<Ticket className="h-6 w-6" />}
+              title="No bookings found"
+              description="Book a resource to get started."
+              actionLabel="Book Resource"
+              onAction={() => setShowBookingForm(true)}
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">

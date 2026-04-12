@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
-import { Plus } from "lucide-react";
+import { Plus, CheckSquare } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export default async function TasksPage() {
   const supabase = await createClient();
@@ -64,6 +65,16 @@ export default async function TasksPage() {
         }
       />
 
+      {(!tasks || tasks.length === 0) ? (
+        <EmptyState
+          icon={<CheckSquare className="h-6 w-6" />}
+          title="No tasks yet"
+          description="Create your first task to start tracking work."
+          actionLabel="New Task"
+          actionHref="/tasks/new"
+        />
+      ) : (
+      <>
       {/* Pending Tasks */}
       <Card>
         <CardHeader>
@@ -135,6 +146,8 @@ export default async function TasksPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+      </>
       )}
     </div>
   );
