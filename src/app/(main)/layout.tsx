@@ -14,7 +14,7 @@ export default function MainLayout({
       <PresenceProvider>
         <AppNav />
         <ReminderNotifier />
-        <main className="mx-auto max-w-6xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8 pb-[calc(env(safe-area-inset-bottom)+2rem)]">
+        <main className="w-full px-4 py-5 sm:px-6 sm:py-8 lg:px-10 xl:px-14 pb-[calc(env(safe-area-inset-bottom)+2rem)]">
           <PageTransition>{children}</PageTransition>
         </main>
       </PresenceProvider>

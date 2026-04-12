@@ -24,6 +24,7 @@ import {
   Settings,
   HelpCircle,
   Star,
+  Flame,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
@@ -67,6 +68,7 @@ const navSections = [
     items: [
       { href: "/analytics", label: "Analytics", icon: BarChart3 },
       { href: "/reports", label: "Reports", icon: FileDown },
+      { href: "/motivation", label: "Motivation", icon: Flame },
     ],
   },
   {

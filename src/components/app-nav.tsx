@@ -78,18 +78,23 @@ export function AppNav() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:border-zinc-800 dark:bg-zinc-900/80 dark:supports-[backdrop-filter]:bg-zinc-900/60">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-2 px-3 sm:px-4">
-        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+      <div className="flex h-14 w-full items-center gap-2 px-3 sm:gap-3 sm:px-4 lg:px-6">
+        {/* Left: hamburger (mobile) + logo + workspace (desktop) */}
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <MobileNav />
           <Link href="/dashboard" className="flex shrink-0 items-center gap-2 text-lg font-bold text-indigo-600 dark:text-indigo-400">
             Trackify
           </Link>
-          <div className="hidden sm:block">
+          <div className="hidden min-w-0 max-w-[180px] lg:block xl:max-w-[220px]">
             <WorkspaceSwitcher />
           </div>
-          <CommandPalette />
+          <div className="hidden sm:block">
+            <CommandPalette />
+          </div>
         </div>
-        <nav className="hidden items-center gap-0.5 md:flex">
+
+        {/* Center: primary nav — takes remaining space and scrolls if too many items */}
+        <nav className="hidden min-w-0 flex-1 items-center justify-center gap-0.5 overflow-x-auto md:flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {primaryNav.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(href + "/");
             return (
@@ -97,7 +102,7 @@ export function AppNav() {
                 key={href}
                 href={href}
                 title={label}
-                className={`flex items-center gap-1.5 rounded-lg px-2 py-2 text-[13px] font-medium transition-colors xl:px-2.5 ${
+                className={`flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-2 text-[13px] font-medium transition-colors xl:px-2.5 ${
                   active
                     ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300"
                     : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
@@ -113,7 +118,7 @@ export function AppNav() {
             <DropdownMenu.Trigger asChild>
               <button
                 title="More"
-                className={`flex items-center gap-1 rounded-lg px-2 py-2 text-[13px] font-medium transition-colors xl:px-2.5 ${
+                className={`flex shrink-0 items-center gap-1 rounded-lg px-2 py-2 text-[13px] font-medium transition-colors xl:px-2.5 ${
                   isMoreActive
                     ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300"
                     : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
@@ -151,10 +156,11 @@ export function AppNav() {
             </DropdownMenu.Portal>
           </DropdownMenu.Root>
         </nav>
+        {/* Right: utility icons + user */}
         <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
           <NotificationBell />
           <MentionsPopover />
-          <div className="hidden sm:block">
+          <div className="hidden lg:block">
             <UserNavInfo />
           </div>
           <button
