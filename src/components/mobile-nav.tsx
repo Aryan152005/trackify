@@ -92,24 +92,12 @@ export function MobileNav() {
     close();
   }, [pathname, close]);
 
-  // Lock body scroll when open — iOS-safe (position: fixed preserves scroll position)
+  // Lock body scroll when open (simple overflow:hidden — position:fixed broke drawer height on some devices)
   useEffect(() => {
     if (!open) return;
-    const scrollY = window.scrollY;
-    const body = document.body;
-    body.style.position = "fixed";
-    body.style.top = `-${scrollY}px`;
-    body.style.left = "0";
-    body.style.right = "0";
-    body.style.width = "100%";
-    return () => {
-      body.style.position = "";
-      body.style.top = "";
-      body.style.left = "";
-      body.style.right = "";
-      body.style.width = "";
-      window.scrollTo(0, scrollY);
-    };
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
   }, [open]);
 
   // Close on Escape
@@ -146,7 +134,7 @@ export function MobileNav() {
       {/* Drawer */}
       <div
         className={cn(
-          "fixed left-0 top-0 z-50 flex h-full w-72 max-w-[85vw] flex-col bg-white shadow-2xl transition-transform duration-200 ease-out dark:bg-zinc-900 md:hidden",
+          "fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-white shadow-2xl transition-transform duration-200 ease-out dark:bg-zinc-900 md:hidden",
           open ? "translate-x-0" : "-translate-x-full"
         )}
         role="dialog"
