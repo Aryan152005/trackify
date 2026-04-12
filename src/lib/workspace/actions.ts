@@ -285,6 +285,60 @@ export async function updateWorkspace(
   if (error) throw new Error(error.message);
 }
 
+/**
+ * Returns display name + email for a list of user IDs. Falls back to
+ * auth.users.email (via admin client) when the user_profiles row is missing —
+ * eliminates "Unknown" labels on the members page.
+ */
+export async function getMemberDisplayInfo(userIds: string[]): Promise<
+  Record<string, { name: string; email: string; avatar_url: string | null }>
+> {
+  const unique = [...new Set(userIds.filter(Boolean))];
+  const result: Record<string, { name: string; email: string; avatar_url: string | null }> = {};
+  if (unique.length === 0) return result;
+
+  const supabase = await createClient();
+  const { data: profiles } = await supabase
+    .from("user_profiles")
+    .select("user_id, name, avatar_url")
+    .in("user_id", unique);
+
+  for (const p of profiles ?? []) {
+    result[p.user_id as string] = {
+      name: (p.name as string) ?? "",
+      email: "",
+      avatar_url: (p.avatar_url as string) ?? null,
+    };
+  }
+
+  // Fill in emails (always) and names for users without a profile, via admin.
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  const admin = createAdminClient();
+  for (const uid of unique) {
+    try {
+      const { data } = await admin.auth.admin.getUserById(uid);
+      const email = data?.user?.email ?? "";
+      const existing = result[uid];
+      if (existing) {
+        existing.email = email;
+        if (!existing.name) existing.name = email.split("@")[0] || "Member";
+      } else {
+        result[uid] = {
+          name: email.split("@")[0] || "Member",
+          email,
+          avatar_url: null,
+        };
+      }
+    } catch {
+      if (!result[uid]) {
+        result[uid] = { name: "Member", email: "", avatar_url: null };
+      }
+    }
+  }
+
+  return result;
+}
+
 export async function getActiveWorkspaceId(): Promise<string | null> {
   const supabase = await createClient();
   const {

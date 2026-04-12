@@ -38,6 +38,10 @@ function getEntityHref(notification: Notification): string | null {
     reminder: "/reminders",
     board: "/boards",
     note: "/notes",
+    page: "/notes",
+    drawing: "/drawings",
+    mindmap: "/mindmaps",
+    challenge: "/challenges",
   };
   const base = map[notification.entity_type];
   if (!base) return null;

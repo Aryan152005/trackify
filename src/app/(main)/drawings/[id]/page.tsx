@@ -48,8 +48,10 @@ export default function DrawingDetailPage() {
     "saved" | "saving" | "unsaved" | "idle"
   >("idle");
   const [deleting, setDeleting] = useState(false);
+  const [remoteUpdate, setRemoteUpdate] = useState<{ elements?: unknown[]; appState?: Record<string, unknown> } | null>(null);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selfIdRef = useRef<string>("");
 
   // -----------------------------------------------------------------------
   // Fetch drawing
@@ -87,6 +89,31 @@ export default function DrawingDetailPage() {
     };
   }, []);
 
+  // Real-time collaborative drawing via a Supabase broadcast channel.
+  // Each user publishes their local scene, peers apply it via updateScene.
+  const channelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
+  useEffect(() => {
+    if (!drawingId) return;
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      selfIdRef.current = data.user?.id ?? Math.random().toString(36).slice(2);
+    });
+    const channel = supabase.channel(`drawing-scene-${drawingId}`, {
+      config: { broadcast: { self: false } },
+    });
+    channel.on("broadcast", { event: "scene" }, (payload) => {
+      const p = payload.payload as { from: string; elements?: unknown[]; appState?: Record<string, unknown> };
+      if (!p || p.from === selfIdRef.current) return;
+      setRemoteUpdate({ elements: p.elements, appState: p.appState });
+    });
+    channel.subscribe();
+    channelRef.current = channel;
+    return () => {
+      supabase.removeChannel(channel);
+      channelRef.current = null;
+    };
+  }, [drawingId]);
+
   // -----------------------------------------------------------------------
   // Auto-save handler (called by TldrawWrapper on change, already debounced)
   // -----------------------------------------------------------------------
@@ -94,6 +121,19 @@ export default function DrawingDetailPage() {
   const handleDrawingChange = useCallback(
     (data: Record<string, unknown>) => {
       setSaveStatus("unsaved");
+
+      // Broadcast to peers immediately for live collab (no DB wait).
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: "broadcast",
+          event: "scene",
+          payload: {
+            from: selfIdRef.current,
+            elements: (data as { elements?: unknown[] }).elements ?? [],
+            appState: (data as { appState?: Record<string, unknown> }).appState ?? {},
+          },
+        });
+      }
 
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
@@ -252,6 +292,7 @@ export default function DrawingDetailPage() {
         <TldrawWrapper
           initialData={drawing.data}
           onChange={handleDrawingChange}
+          remoteUpdate={remoteUpdate}
         />
       </div>
     </AnimatedPage>

@@ -21,6 +21,8 @@ const Excalidraw = dynamic(
 interface TldrawWrapperProps {
   initialData?: Record<string, unknown>;
   onChange?: (data: Record<string, unknown>) => void;
+  /** Remote updates to apply to the scene without re-mounting. */
+  remoteUpdate?: { elements?: unknown[]; appState?: Record<string, unknown> } | null;
 }
 
 /**
@@ -31,7 +33,7 @@ interface TldrawWrapperProps {
  * Old tldraw-format data in the DB will fail to parse here — the canvas
  * just opens blank and the user can re-draw.
  */
-export function TldrawWrapper({ initialData, onChange }: TldrawWrapperProps) {
+export function TldrawWrapper({ initialData, onChange, remoteUpdate }: TldrawWrapperProps) {
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [parsedInitial, setParsedInitial] = useState<{
@@ -95,6 +97,19 @@ export function TldrawWrapper({ initialData, onChange }: TldrawWrapperProps) {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, []);
+
+  // Apply remote collaborator updates into the live scene.
+  useEffect(() => {
+    if (!remoteUpdate || !apiRef.current) return;
+    try {
+      apiRef.current.updateScene({
+        elements: (remoteUpdate.elements ?? []) as never,
+        appState: { ...(remoteUpdate.appState ?? {}), collaborators: new Map() } as never,
+      });
+    } catch {
+      // ignore — scene not ready
+    }
+  }, [remoteUpdate]);
 
   if (!parsedInitial) {
     return (

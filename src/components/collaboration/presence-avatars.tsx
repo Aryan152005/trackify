@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, forwardRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import * as Popover from "@radix-ui/react-popover";
 import { cn } from "@/lib/utils";
@@ -139,8 +139,11 @@ export const PresenceAvatars = CollaborationPresenceAvatars;
 // AvatarWithTooltip
 // ---------------------------------------------------------------------------
 
-function AvatarWithTooltip({ user }: { user: PresenceUser }) {
+// Wrapped in forwardRef so framer-motion's <AnimatePresence> can attach the
+// presence ref it needs for exit animations. The ref is otherwise unused.
+const AvatarWithTooltip = forwardRef<HTMLDivElement, { user: PresenceUser }>(function AvatarWithTooltip({ user }, ref) {
   return (
+    <div ref={ref} style={{ display: "contents" }}>
     <Popover.Root>
       <Popover.Trigger asChild>
         <motion.button
@@ -188,8 +191,9 @@ function AvatarWithTooltip({ user }: { user: PresenceUser }) {
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+    </div>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // OverflowBadge

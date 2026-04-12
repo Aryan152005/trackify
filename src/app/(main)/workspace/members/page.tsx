@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useWorkspace, useRequireRole } from "@/lib/workspace/hooks";
-import { updateMemberRole, removeMember } from "@/lib/workspace/actions";
+import { updateMemberRole, removeMember, getMemberDisplayInfo } from "@/lib/workspace/actions";
 import {
   getPendingInvitations,
   revokeInvitation,
@@ -29,6 +29,7 @@ interface MemberRow {
   role: WorkspaceRole;
   joined_at: string;
   name: string;
+  email: string;
   avatar_url: string | null;
 }
 
@@ -64,26 +65,20 @@ export default function WorkspaceMembersPage() {
 
     if (rawMembers && rawMembers.length > 0) {
       const userIds = rawMembers.map((m) => m.user_id as string);
-      const { data: profiles } = await supabase
-        .from("user_profiles")
-        .select("user_id, name, avatar_url")
-        .in("user_id", userIds);
-      const pmap = new Map<string, { name: string; avatar_url: string | null }>();
-      for (const p of profiles ?? []) {
-        pmap.set(p.user_id as string, {
-          name: (p.name as string) ?? "Unknown",
-          avatar_url: (p.avatar_url as string) ?? null,
-        });
-      }
+      const info = await getMemberDisplayInfo(userIds);
       setMembers(
-        rawMembers.map((m) => ({
-          id: m.id as string,
-          user_id: m.user_id as string,
-          role: m.role as WorkspaceRole,
-          joined_at: m.joined_at as string,
-          name: pmap.get(m.user_id as string)?.name ?? "Unknown",
-          avatar_url: pmap.get(m.user_id as string)?.avatar_url ?? null,
-        }))
+        rawMembers.map((m) => {
+          const i = info[m.user_id as string];
+          return {
+            id: m.id as string,
+            user_id: m.user_id as string,
+            role: m.role as WorkspaceRole,
+            joined_at: m.joined_at as string,
+            name: i?.name || i?.email || "Member",
+            email: i?.email ?? "",
+            avatar_url: i?.avatar_url ?? null,
+          };
+        })
       );
     } else {
       setMembers([]);
@@ -367,7 +362,10 @@ export default function WorkspaceMembersPage() {
                   </div>
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">{member.name}</p>
-                    <p className="text-xs text-zinc-500">
+                    {member.email && member.email !== member.name && (
+                      <p className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">{member.email}</p>
+                    )}
+                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
                       Joined {formatDistanceToNow(new Date(member.joined_at), { addSuffix: true })}
                     </p>
                   </div>
