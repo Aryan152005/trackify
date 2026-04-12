@@ -25,21 +25,32 @@ async function getAuthenticatedUser() {
 export async function getMentions(workspaceId: string, userId: string) {
   const { supabase } = await getAuthenticatedUser();
 
+  // FK `mentions.mentioned_by` points at auth.users, so we can't embed
+  // user_profiles directly via PostgREST. Two-step lookup instead.
   const { data: mentions, error } = await supabase
     .from("mentions")
-    .select(
-      `
-      *,
-      mentioned_by_profile:user_profiles!mentions_mentioned_by_fkey(name, avatar_url),
-      comment:comments!mentions_comment_id_fkey(content, created_at)
-    `
-    )
+    .select(`*, comment:comments!mentions_comment_id_fkey(content, created_at)`)
     .eq("workspace_id", workspaceId)
     .eq("mentioned_user_id", userId)
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(`Failed to fetch mentions: ${error.message}`);
-  return mentions;
+
+  const mentionerIds = [...new Set((mentions ?? []).map((m) => m.mentioned_by as string))];
+  const { data: profiles } = mentionerIds.length > 0
+    ? await supabase.from("user_profiles").select("user_id, name, avatar_url").in("user_id", mentionerIds)
+    : { data: [] as { user_id: string; name: string; avatar_url: string | null }[] };
+  const pmap = new Map<string, { name: string; avatar_url: string | null }>();
+  for (const p of profiles ?? []) {
+    pmap.set(p.user_id as string, {
+      name: (p.name as string) ?? "Someone",
+      avatar_url: (p.avatar_url as string) ?? null,
+    });
+  }
+  return (mentions ?? []).map((m) => ({
+    ...m,
+    mentioned_by_profile: pmap.get(m.mentioned_by as string) ?? null,
+  }));
 }
 
 export async function getUnreadMentionCount(

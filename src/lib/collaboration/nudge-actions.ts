@@ -129,8 +129,18 @@ export async function nudgeTeammate(args: {
       tag: `nudge-${args.entityType}-${args.entityId}`,
     });
     pushSent = res.sent;
-  } catch {
-    /* swallow — in-app notif already created */
+  } catch (e) {
+    // Push is best-effort (recipient may have no subscribed devices) but log
+    // so failures are traceable in /admin/logs.
+    await logEvent({
+      service: "other",
+      level: "warn",
+      tag: "nudge.pushFailed",
+      message: e instanceof Error ? e.message : "Push failed",
+      metadata: { toUserId: args.toUserId, entityType: args.entityType, entityId: args.entityId },
+      userId: user.id,
+      workspaceId: args.workspaceId,
+    });
   }
 
   await logEvent({

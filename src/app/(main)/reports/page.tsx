@@ -32,9 +32,14 @@ export default function ReportsPage() {
         setError("Not authenticated");
         return;
       }
+      if (!workspaceId) {
+        setError("No active workspace — pick one from the switcher first.");
+        return;
+      }
 
-      // Fetch entries
-      let entriesQuery = supabase
+      // Fetch entries scoped to the current workspace. Requiring the filter
+      // prevents accidentally exporting entries from another workspace.
+      const entriesQuery = supabase
         .from("work_entries")
         .select(
           `
@@ -44,13 +49,10 @@ export default function ReportsPage() {
         `
         )
         .eq("user_id", user.id)
+        .eq("workspace_id", workspaceId)
         .gte("date", startDate)
         .lte("date", endDate)
         .order("date", { ascending: false });
-
-      if (workspaceId) {
-        entriesQuery = entriesQuery.eq("workspace_id", workspaceId);
-      }
 
       const { data: entries } = await entriesQuery;
 

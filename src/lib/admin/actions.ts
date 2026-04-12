@@ -4,7 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? "paratakkearyan@gmail.com").toLowerCase();
+// Fallback is the project owner's email for local/dev; prod sets ADMIN_EMAIL
+// in the environment so this const is effectively that value. A missing env
+// var in prod = no admin access (not the fallback), since `??` only matches null/undefined.
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL?.trim() || "paratakkearyan@gmail.com").toLowerCase();
 
 export async function requireAdmin() {
   const supabase = await createClient();

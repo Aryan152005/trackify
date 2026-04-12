@@ -32,7 +32,19 @@ export async function createNotification(data: {
   entity_type?: string;
   entity_id?: string;
 }) {
-  const { supabase } = await getAuthenticatedUser();
+  const { supabase, user } = await getAuthenticatedUser();
+
+  // Defense-in-depth: the caller must be a member of the same workspace as
+  // the recipient. RLS should already enforce this, but block early.
+  const { data: caller } = await supabase
+    .from("workspace_members")
+    .select("workspace_id")
+    .eq("workspace_id", data.workspace_id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!caller) {
+    throw new Error("Not a member of this workspace");
+  }
 
   const { data: notification, error } = await supabase
     .from("notifications")
@@ -53,12 +65,13 @@ export async function createNotification(data: {
 }
 
 export async function markAsRead(notificationId: string) {
-  const { supabase } = await getAuthenticatedUser();
+  const { supabase, user } = await getAuthenticatedUser();
 
   const { error } = await supabase
     .from("notifications")
     .update({ is_read: true })
-    .eq("id", notificationId);
+    .eq("id", notificationId)
+    .eq("user_id", user.id);
 
   if (error) throw new Error(`Failed to mark notification as read: ${error.message}`);
 }
@@ -77,12 +90,13 @@ export async function markAllRead(workspaceId: string) {
 }
 
 export async function deleteNotification(notificationId: string) {
-  const { supabase } = await getAuthenticatedUser();
+  const { supabase, user } = await getAuthenticatedUser();
 
   const { error } = await supabase
     .from("notifications")
     .delete()
-    .eq("id", notificationId);
+    .eq("id", notificationId)
+    .eq("user_id", user.id);
 
   if (error) throw new Error(`Failed to delete notification: ${error.message}`);
 }
