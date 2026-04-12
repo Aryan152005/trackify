@@ -11,7 +11,10 @@ import {
   X,
   Calendar,
   Shield,
+  Send,
+  Users,
 } from "lucide-react";
+import { listWorkspaceTeammates, nudgeTeammate } from "@/lib/collaboration/nudge-actions";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -95,6 +98,40 @@ export function ShareDialog({
   // New link form state
   const [permission, setPermission] = useState<SharedLinkPermission>("view");
   const [expiresAt, setExpiresAt] = useState<string>("");
+
+  // Direct teammate share
+  interface Teammate { user_id: string; name: string; avatar_url: string | null; role: string }
+  const [teammates, setTeammates] = useState<Teammate[]>([]);
+  const [pickedUserId, setPickedUserId] = useState<string>("");
+  const [pickedAction, setPickedAction] = useState<"view" | "comment" | "edit">("view");
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    if (!workspaceId || !open) return;
+    listWorkspaceTeammates(workspaceId).then(setTeammates).catch(() => setTeammates([]));
+  }, [workspaceId, open]);
+
+  const handleDirectShare = async () => {
+    if (!workspaceId || !pickedUserId) return;
+    setSending(true);
+    try {
+      await nudgeTeammate({
+        toUserId: pickedUserId,
+        workspaceId,
+        entityType: entityType as "page" | "task" | "board" | "entry" | "drawing" | "mindmap" | "challenge",
+        entityId,
+        entityTitle,
+        action: pickedAction,
+      });
+      const name = teammates.find((t) => t.user_id === pickedUserId)?.name ?? "teammate";
+      toast.success(`Notification sent to ${name}`);
+      setPickedUserId("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't send notification");
+    } finally {
+      setSending(false);
+    }
+  };
 
   const fetchLinks = useCallback(async () => {
     if (!workspaceId) return;
@@ -188,6 +225,57 @@ export function ShareDialog({
           </div>
 
           <div className="max-h-[60vh] overflow-y-auto px-5 py-4">
+            {/* Share directly with a teammate (no login dance, they get a notification) */}
+            <div className="mb-5 rounded-lg border border-indigo-200 bg-indigo-50/50 p-4 dark:border-indigo-900/40 dark:bg-indigo-950/20">
+              <h4 className="mb-2 flex items-center gap-1.5 text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                <Users className="h-3.5 w-3.5 text-indigo-500" />
+                Share with a workspace teammate
+              </h4>
+              <p className="mb-3 text-[11px] text-zinc-500 dark:text-zinc-400">
+                They already have workspace access — this just pings them so they open it in-app in real time.
+              </p>
+              <div className="space-y-2">
+                <select
+                  value={pickedUserId}
+                  onChange={(e) => setPickedUserId(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+                >
+                  <option value="">{teammates.length === 0 ? "No other workspace members" : "Pick a teammate…"}</option>
+                  {teammates.map((t) => (
+                    <option key={t.user_id} value={t.user_id}>
+                      {t.name} · {t.role}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex gap-1">
+                  {(["view", "comment", "edit"] as const).map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setPickedAction(k)}
+                      className={cn(
+                        "flex-1 rounded-md border px-2 py-1.5 text-xs font-medium capitalize transition",
+                        pickedAction === k
+                          ? "border-indigo-500 bg-indigo-100 text-indigo-700 dark:border-indigo-400 dark:bg-indigo-900/40 dark:text-indigo-300"
+                          : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+                      )}
+                    >
+                      {k}
+                    </button>
+                  ))}
+                </div>
+                <Button
+                  onClick={handleDirectShare}
+                  disabled={!pickedUserId || sending}
+                  className="w-full gap-1.5"
+                  size="sm"
+                >
+                  {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                  Send invite notification
+                </Button>
+              </div>
+            </div>
+
             {/* Create new link */}
             <div className="mb-5 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
               <h4 className="mb-3 text-sm font-medium text-zinc-900 dark:text-zinc-100">

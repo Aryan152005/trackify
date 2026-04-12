@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToUser } from "@/lib/push/server";
 import { logEvent } from "@/lib/logs/logger";
+import { fetchProfileMap } from "./profile-helper";
 
 interface Member {
   user_id: string;
@@ -23,21 +24,18 @@ export async function listWorkspaceTeammates(workspaceId: string): Promise<Membe
 
   const { data: members, error } = await supabase
     .from("workspace_members")
-    .select("user_id, role, user_profiles(name, avatar_url)")
+    .select("user_id, role")
     .eq("workspace_id", workspaceId);
   if (error) return [];
 
-  return (members ?? [])
-    .filter((m) => m.user_id !== user.id)
-    .map((m) => {
-      const p = m.user_profiles as unknown as { name: string | null; avatar_url: string | null } | null;
-      return {
-        user_id: m.user_id as string,
-        name: p?.name ?? "Unknown",
-        avatar_url: p?.avatar_url ?? null,
-        role: m.role as string,
-      };
-    });
+  const others = (members ?? []).filter((m) => m.user_id !== user.id);
+  const pmap = await fetchProfileMap(supabase, others.map((m) => m.user_id as string));
+  return others.map((m) => ({
+    user_id: m.user_id as string,
+    name: pmap.get(m.user_id as string)?.name ?? "Unknown",
+    avatar_url: pmap.get(m.user_id as string)?.avatar_url ?? null,
+    role: m.role as string,
+  }));
 }
 
 type EntityKind = "page" | "task" | "board" | "entry" | "drawing" | "mindmap" | "challenge";
