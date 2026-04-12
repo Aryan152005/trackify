@@ -48,17 +48,51 @@ export function EmailPreviewDialog({ open, onOpenChange, payload }: Props) {
 
   async function copy(kind: "html" | "text" | "to" | "subject") {
     try {
-      const val =
-        kind === "html" ? payload!.html
-        : kind === "text" ? text
-        : kind === "to" ? payload!.to
-        : payload!.subject;
-      await navigator.clipboard.writeText(val);
+      if (kind === "html") {
+        // Write BOTH text/html and text/plain. When the target paste context
+        // is a rich editor (Gmail, Outlook, Apple Mail), it consumes text/html
+        // and the rendered email appears with full formatting. Plain-text
+        // editors fall back to the text/plain variant.
+        if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+          const htmlBlob = new Blob([payload!.html], { type: "text/html" });
+          const textBlob = new Blob([text], { type: "text/plain" });
+          await navigator.clipboard.write([
+            new ClipboardItem({
+              "text/html": htmlBlob,
+              "text/plain": textBlob,
+            }),
+          ]);
+        } else {
+          // Firefox / older browsers: copy-from-live-DOM fallback that
+          // retains rendered HTML via execCommand('copy') on a temporary
+          // contenteditable container.
+          const container = document.createElement("div");
+          container.setAttribute("contenteditable", "true");
+          container.style.position = "fixed";
+          container.style.left = "-9999px";
+          container.innerHTML = payload!.html;
+          document.body.appendChild(container);
+          const range = document.createRange();
+          range.selectNodeContents(container);
+          const sel = window.getSelection();
+          sel?.removeAllRanges();
+          sel?.addRange(range);
+          document.execCommand("copy");
+          sel?.removeAllRanges();
+          document.body.removeChild(container);
+        }
+      } else {
+        const val =
+          kind === "text" ? text
+          : kind === "to" ? payload!.to
+          : payload!.subject;
+        await navigator.clipboard.writeText(val);
+      }
       setCopied(kind);
       setCopyError(null);
       setTimeout(() => setCopied(null), 2000);
     } catch {
-      setCopyError("Clipboard blocked. Select the text in the preview and copy manually.");
+      setCopyError("Clipboard blocked. Select the preview and copy manually with ⌘/Ctrl+C.");
     }
   }
 
@@ -121,7 +155,7 @@ export function EmailPreviewDialog({ open, onOpenChange, payload }: Props) {
 
           <div className="flex flex-col gap-2 border-t border-zinc-200 px-5 py-4 dark:border-zinc-800 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Paste the HTML into Gmail (Compose → <kbd>…</kbd> → <em>Insert HTML</em>) or your mail client.
+              <strong>Copy HTML</strong> keeps the design. Paste directly into Gmail / Outlook / Apple Mail compose — the rendered email appears with logo, buttons, colors.
             </p>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" onClick={() => copy("text")}>
