@@ -51,8 +51,15 @@ export function TldrawWrapper({ initialData, onChange }: TldrawWrapperProps) {
   }, []);
 
   return (
-    <div className="min-h-[calc(100vh-12rem)] w-full rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-      <Tldraw onMount={handleMount} />
+    <div
+      className="relative h-[calc(100dvh-10rem)] w-full overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800"
+      style={{ minHeight: 520 }}
+    >
+      {/* Tldraw requires an absolutely-positioned parent with explicit height
+          to render its floating toolbars (pen/eraser/colors/shapes/etc.). */}
+      <div className="absolute inset-0">
+        <Tldraw onMount={handleMount} />
+      </div>
     </div>
   );
 }
