@@ -70,8 +70,8 @@ export function CollaborationPresenceAvatars({
       const { data: profile } = await supabase
         .from("user_profiles")
         .select("name, avatar_url")
-        .eq("id", user.id)
-        .single();
+        .eq("user_id", user.id)
+        .maybeSingle();
 
       setCurrentUser({
         id: user.id,
