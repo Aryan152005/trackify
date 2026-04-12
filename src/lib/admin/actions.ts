@@ -265,31 +265,49 @@ export async function getUserDetail(userId: string) {
     { data: pages },
     { data: boards },
     { data: reminders },
+    { data: logs },
+    { data: feedback },
+    { data: timers },
   ] = await Promise.all([
     admin.from("user_profiles").select("*").eq("user_id", userId).single(),
-    admin.from("work_entries").select("id, title, date, status, productivity_score, created_at")
-      .eq("user_id", userId).order("date", { ascending: false }).limit(50),
-    admin.from("tasks").select("id, title, status, priority, due_date, created_at, completed_at")
-      .eq("user_id", userId).order("created_at", { ascending: false }).limit(50),
+    // Full body so admin can read WHAT was written
+    admin.from("work_entries").select(
+      "id, title, description, work_done, learning, next_day_plan, mood, date, status, productivity_score, created_at"
+    ).eq("user_id", userId).order("date", { ascending: false }).limit(50),
+    admin.from("tasks").select(
+      "id, title, description, status, priority, due_date, created_at, completed_at"
+    ).eq("user_id", userId).order("created_at", { ascending: false }).limit(50),
     admin.from("pages").select("id, title, created_at, updated_at")
       .eq("created_by", userId).order("updated_at", { ascending: false }).limit(20),
     admin.from("boards").select("id, name, created_at")
       .eq("created_by", userId).order("created_at", { ascending: false }).limit(20),
-    admin.from("reminders").select("id, title, reminder_time, is_completed, created_at")
+    admin.from("reminders").select("id, title, description, reminder_time, is_completed, created_at")
       .eq("user_id", userId).order("created_at", { ascending: false }).limit(20),
+    // Recent system_logs attributed to this user
+    admin.from("system_logs").select("id, service, level, tag, message, metadata, created_at")
+      .eq("user_id", userId).order("created_at", { ascending: false }).limit(50),
+    // Any feedback they've submitted
+    admin.from("user_feedback").select("id, type, message, rating, status, created_at")
+      .eq("user_id", userId).order("created_at", { ascending: false }).limit(20),
+    // Timer sessions for time-on-platform signal
+    admin.from("timer_sessions").select("id, duration_seconds, started_at, ended_at")
+      .eq("user_id", userId).order("started_at", { ascending: false }).limit(30),
   ]);
 
-  // Auth info
   const { data: authData } = await admin.auth.admin.getUserById(userId);
 
   return {
     profile,
     email: authData?.user?.email ?? "unknown",
     lastSignIn: authData?.user?.last_sign_in_at ?? null,
+    createdAt: authData?.user?.created_at ?? null,
     entries: entries ?? [],
     tasks: tasks ?? [],
     pages: pages ?? [],
     boards: boards ?? [],
     reminders: reminders ?? [],
+    logs: logs ?? [],
+    feedback: feedback ?? [],
+    timers: timers ?? [],
   };
 }

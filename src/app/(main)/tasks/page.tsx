@@ -2,12 +2,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveWorkspaceId } from "@/lib/workspace/actions";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { format, parseISO } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
-import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
-import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
+import { TaskRow } from "@/components/tasks/task-row";
 import { Plus, CheckSquare } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 
@@ -83,30 +81,9 @@ export default async function TasksPage() {
         </CardHeader>
         <CardContent>
           {pendingTasks.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {pendingTasks.map((task) => (
-                <Link
-                  key={task.id}
-                  href={`/tasks/${task.id}`}
-                  className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 p-4 transition hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-800 dark:hover:bg-zinc-700"
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3">
-                      <h3 className="font-medium text-zinc-900 dark:text-zinc-100">{task.title}</h3>
-                      <TaskStatusBadge status={task.status} />
-                      <TaskPriorityBadge priority={task.priority} />
-                    </div>
-                    {task.description && (
-                      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{task.description}</p>
-                    )}
-                    {task.due_date && (
-                      <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-                        Due: {format(parseISO(task.due_date), "MMM d, yyyy")}
-                        {task.due_time && ` at ${task.due_time}`}
-                      </p>
-                    )}
-                  </div>
-                </Link>
+                <TaskRow key={task.id} task={task} />
               ))}
             </div>
           ) : (
@@ -123,25 +100,9 @@ export default async function TasksPage() {
             <CardDescription>Tasks you&apos;ve finished</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {completedTasks.map((task) => (
-                <Link
-                  key={task.id}
-                  href={`/tasks/${task.id}`}
-                  className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 p-4 opacity-60 transition hover:opacity-100 dark:border-zinc-800 dark:bg-zinc-800"
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3">
-                      <h3 className="font-medium text-zinc-900 dark:text-zinc-100 line-through">{task.title}</h3>
-                      <TaskStatusBadge status={task.status} />
-                    </div>
-                    {task.completed_at && (
-                      <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-                        Completed: {format(parseISO(task.completed_at), "MMM d, yyyy")}
-                      </p>
-                    )}
-                  </div>
-                </Link>
+                <TaskRow key={task.id} task={task} completed />
               ))}
             </div>
           </CardContent>

@@ -2,14 +2,14 @@ import { requireAdmin, getUserDetail } from "@/lib/admin/actions";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { format } from "date-fns";
-import { ArrowLeft } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
+import { format, formatDistanceToNow } from "date-fns";
+import {
+  Activity, AlertCircle, AlertTriangle, Info, Clock, Star, MessageSquare,
+  CheckSquare, FileText, StickyNote, Columns3, Bell,
+} from "lucide-react";
 
-export default async function AdminUserDetail({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function AdminUserDetail({ params }: { params: { id: string } }) {
   await requireAdmin();
   const user = await getUserDetail(params.id);
 
@@ -28,207 +28,324 @@ export default async function AdminUserDetail({
   const avgScore = user.entries.length > 0
     ? (user.entries.reduce((s, e) => s + (e.productivity_score ?? 0), 0) / user.entries.length).toFixed(1)
     : "—";
+  const totalMinutes = Math.round(
+    user.timers.reduce((s, t) => s + ((t.duration_seconds as number) ?? 0), 0) / 60
+  );
+  const errorLogs = user.logs.filter((l) => l.level === "error").length;
+  const warnLogs = user.logs.filter((l) => l.level === "warn").length;
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link href="/admin">
-          <Button variant="outline" size="sm">
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Back
-          </Button>
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-            {user.profile.name}
-          </h1>
-          <p className="text-sm text-zinc-500">{user.email}</p>
-        </div>
+    <div className="space-y-6">
+      <PageHeader
+        title={user.profile.name}
+        description={`${user.email} · joined ${user.createdAt ? formatDistanceToNow(new Date(user.createdAt), { addSuffix: true }) : "—"}`}
+        backHref="/admin"
+        backLabel="Back to Admin"
+      />
+
+      {/* Stats */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+        <StatCard icon={<FileText className="h-4 w-4" />} label="Entries" value={String(user.entries.length)} />
+        <StatCard icon={<CheckSquare className="h-4 w-4" />} label="Tasks" value={`${tasksDone}/${user.tasks.length}`} />
+        <StatCard icon={<StickyNote className="h-4 w-4" />} label="Pages" value={String(user.pages.length)} />
+        <StatCard icon={<Columns3 className="h-4 w-4" />} label="Boards" value={String(user.boards.length)} />
+        <StatCard icon={<Bell className="h-4 w-4" />} label="Reminders" value={String(user.reminders.length)} />
+        <StatCard icon={<Clock className="h-4 w-4" />} label="Tracked" value={`${totalMinutes}m`} />
+        <StatCard
+          icon={<Activity className="h-4 w-4" />}
+          label="Last seen"
+          value={user.lastSignIn ? formatDistanceToNow(new Date(user.lastSignIn), { addSuffix: true }) : "Never"}
+          compact
+        />
       </div>
 
-      {/* User Stats */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <Card>
-          <CardHeader className="pb-1">
-            <CardDescription className="text-xs">Entries</CardDescription>
-            <CardTitle className="text-2xl">{user.entries.length}</CardTitle>
+      {/* Health signal */}
+      {(errorLogs > 0 || warnLogs > 0) && (
+        <Card className="border-amber-300 bg-amber-50/40 dark:border-amber-900/50 dark:bg-amber-950/20">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              Recent issues: {errorLogs} error{errorLogs === 1 ? "" : "s"}, {warnLogs} warning{warnLogs === 1 ? "" : "s"}
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Last 50 system events for this user — see full list below.
+            </CardDescription>
           </CardHeader>
         </Card>
+      )}
+
+      {/* Activity timeline (system_logs) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Activity timeline</CardTitle>
+          <CardDescription>Last 50 logged events — what this user did, when, and anything that failed.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {user.logs.length === 0 ? (
+            <p className="py-6 text-center text-sm text-zinc-400">No activity recorded yet</p>
+          ) : (
+            <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {user.logs.map((log) => {
+                const Icon = log.level === "error" ? AlertCircle : log.level === "warn" ? AlertTriangle : Info;
+                const tone =
+                  log.level === "error" ? "text-red-500"
+                  : log.level === "warn" ? "text-amber-500"
+                  : "text-indigo-500";
+                return (
+                  <li key={log.id} className="flex items-start gap-2.5 py-2 text-sm">
+                    <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${tone}`} />
+                    <span className="shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                      {log.service}
+                    </span>
+                    {log.tag && (
+                      <span className="shrink-0 font-mono text-[10px] text-zinc-400">{log.tag}</span>
+                    )}
+                    <span className="min-w-0 flex-1 truncate text-zinc-800 dark:text-zinc-200">{log.message}</span>
+                    <span className="shrink-0 tabular-nums text-xs text-zinc-400">
+                      {format(new Date(log.created_at), "MMM d HH:mm")}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Entries with content */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Work entries ({user.entries.length})</CardTitle>
+          <CardDescription>What this user logged. Click to read full body.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {user.entries.length === 0 ? (
+            <p className="py-4 text-center text-sm text-zinc-400">No entries yet</p>
+          ) : (
+            <ul className="space-y-3">
+              {user.entries.slice(0, 10).map((e) => (
+                <li key={e.id} className="rounded-lg border border-zinc-100 p-3 dark:border-zinc-800">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-medium text-zinc-900 dark:text-zinc-100">{e.title}</p>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-zinc-400">{e.date}</span>
+                      {e.productivity_score != null && (
+                        <span className="text-amber-500">★ {e.productivity_score}/10</span>
+                      )}
+                      <StatusPill status={e.status as string} />
+                    </div>
+                  </div>
+                  {e.description && (
+                    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{e.description}</p>
+                  )}
+                  {e.work_done && (
+                    <p className="mt-1 text-xs text-zinc-500">
+                      <span className="font-semibold uppercase tracking-wide">Done:</span> {truncate(e.work_done, 240)}
+                    </p>
+                  )}
+                  {e.learning && (
+                    <p className="mt-0.5 text-xs text-zinc-500">
+                      <span className="font-semibold uppercase tracking-wide">Learned:</span> {truncate(e.learning, 180)}
+                    </p>
+                  )}
+                  {e.mood && (
+                    <p className="mt-0.5 text-xs text-zinc-400">Mood: {e.mood}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {user.entries.length > 10 && (
+            <p className="mt-3 text-center text-xs text-zinc-400">
+              +{user.entries.length - 10} more entries
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Tasks with descriptions */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Tasks ({user.tasks.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {user.tasks.length === 0 ? (
+            <p className="py-4 text-center text-sm text-zinc-400">No tasks yet</p>
+          ) : (
+            <ul className="space-y-2">
+              {user.tasks.slice(0, 15).map((t) => (
+                <li key={t.id} className="flex items-start justify-between gap-3 rounded-lg border border-zinc-100 p-3 dark:border-zinc-800">
+                  <div className="min-w-0 flex-1">
+                    <p className={`font-medium ${t.status === "done" ? "line-through text-zinc-400" : "text-zinc-900 dark:text-zinc-100"}`}>
+                      {t.title}
+                    </p>
+                    {t.description && (
+                      <p className="mt-0.5 text-sm text-zinc-500">{truncate(t.description, 180)}</p>
+                    )}
+                    <p className="mt-1 text-xs text-zinc-400">
+                      {t.priority} priority
+                      {t.due_date && ` · due ${t.due_date}`}
+                      {t.completed_at && ` · completed ${format(new Date(t.completed_at), "MMM d")}`}
+                    </p>
+                  </div>
+                  <StatusPill status={t.status as string} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Feedback submitted */}
+      {user.feedback.length > 0 && (
         <Card>
-          <CardHeader className="pb-1">
-            <CardDescription className="text-xs">Tasks</CardDescription>
-            <CardTitle className="text-2xl">{tasksDone}/{user.tasks.length}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-1">
-            <CardDescription className="text-xs">Pages</CardDescription>
-            <CardTitle className="text-2xl">{user.pages.length}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-1">
-            <CardDescription className="text-xs">Avg Score</CardDescription>
-            <CardTitle className="text-2xl">{avgScore}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-1">
-            <CardDescription className="text-xs">Last Sign In</CardDescription>
-            <CardTitle className="text-lg">
-              {user.lastSignIn ? format(new Date(user.lastSignIn), "MMM d, HH:mm") : "Never"}
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Star className="h-4 w-4 text-amber-500" />
+              Feedback from this user ({user.feedback.length})
             </CardTitle>
           </CardHeader>
-        </Card>
-      </div>
-
-      {/* Recent Entries */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Entries ({user.entries.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {user.entries.length > 0 ? (
-            <div className="space-y-2">
-              {user.entries.map((entry) => (
-                <div key={entry.id} className="flex items-center justify-between rounded-lg border border-zinc-100 px-4 py-2.5 dark:border-zinc-800">
-                  <div>
-                    <p className="font-medium text-zinc-900 dark:text-zinc-100">{entry.title}</p>
-                    <p className="text-xs text-zinc-500">{entry.date} &middot; Score: {entry.productivity_score ?? "—"}/10</p>
-                  </div>
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                    entry.status === "done"
-                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
-                      : entry.status === "in-progress"
-                        ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-                        : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
-                  }`}>
-                    {entry.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="py-4 text-center text-sm text-zinc-400">No entries yet</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Recent Tasks */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Tasks ({user.tasks.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {user.tasks.length > 0 ? (
-            <div className="space-y-2">
-              {user.tasks.map((task) => (
-                <div key={task.id} className="flex items-center justify-between rounded-lg border border-zinc-100 px-4 py-2.5 dark:border-zinc-800">
-                  <div>
-                    <p className="font-medium text-zinc-900 dark:text-zinc-100">{task.title}</p>
-                    <p className="text-xs text-zinc-500">
-                      Priority: {task.priority}
-                      {task.due_date && ` · Due: ${task.due_date}`}
-                      {task.completed_at && ` · Completed: ${format(new Date(task.completed_at), "MMM d")}`}
-                    </p>
-                  </div>
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                    task.status === "done"
-                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
-                      : task.status === "in-progress"
-                        ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-                        : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
-                  }`}>
-                    {task.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="py-4 text-center text-sm text-zinc-400">No tasks yet</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Pages & Boards */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Pages ({user.pages.length})</CardTitle>
-          </CardHeader>
           <CardContent>
-            {user.pages.length > 0 ? (
-              <div className="space-y-2">
-                {user.pages.map((page) => (
-                  <div key={page.id} className="rounded-lg border border-zinc-100 px-4 py-2.5 dark:border-zinc-800">
-                    <p className="font-medium text-zinc-900 dark:text-zinc-100">{page.title || "Untitled"}</p>
-                    <p className="text-xs text-zinc-500">
-                      Updated: {format(new Date(page.updated_at), "MMM d, yyyy")}
-                    </p>
+            <ul className="space-y-2">
+              {user.feedback.map((f) => (
+                <li key={f.id} className="rounded-lg border border-zinc-100 p-3 dark:border-zinc-800">
+                  <div className="flex items-center justify-between text-xs text-zinc-500">
+                    <span className="font-semibold uppercase tracking-wide">{f.type}</span>
+                    <span>{format(new Date(f.created_at), "MMM d, yyyy")}</span>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <p className="py-4 text-center text-sm text-zinc-400">No pages yet</p>
-            )}
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">{f.message}</p>
+                  {f.rating != null && (
+                    <p className="mt-1 text-xs text-amber-500">{"★".repeat(f.rating)}{"☆".repeat(5 - f.rating)}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Boards ({user.boards.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {user.boards.length > 0 ? (
-              <div className="space-y-2">
-                {user.boards.map((board) => (
-                  <div key={board.id} className="rounded-lg border border-zinc-100 px-4 py-2.5 dark:border-zinc-800">
-                    <p className="font-medium text-zinc-900 dark:text-zinc-100">{board.name}</p>
-                    <p className="text-xs text-zinc-500">
-                      Created: {format(new Date(board.created_at), "MMM d, yyyy")}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="py-4 text-center text-sm text-zinc-400">No boards yet</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      )}
 
       {/* Reminders */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Reminders ({user.reminders.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {user.reminders.length > 0 ? (
-            <div className="space-y-2">
-              {user.reminders.map((r) => (
-                <div key={r.id} className="flex items-center justify-between rounded-lg border border-zinc-100 px-4 py-2.5 dark:border-zinc-800">
-                  <div>
-                    <p className="font-medium text-zinc-900 dark:text-zinc-100">{r.title}</p>
-                    <p className="text-xs text-zinc-500">
+      {user.reminders.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Reminders ({user.reminders.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {user.reminders.slice(0, 10).map((r) => (
+                <li key={r.id} className="flex items-start justify-between gap-3 rounded-lg border border-zinc-100 p-3 dark:border-zinc-800">
+                  <div className="min-w-0 flex-1">
+                    <p className={`font-medium ${r.is_completed ? "line-through text-zinc-400" : "text-zinc-900 dark:text-zinc-100"}`}>
+                      {r.title}
+                    </p>
+                    {r.description && (
+                      <p className="mt-0.5 text-sm text-zinc-500">{truncate(r.description, 180)}</p>
+                    )}
+                    <p className="mt-1 text-xs text-zinc-400">
                       {format(new Date(r.reminder_time), "MMM d, yyyy HH:mm")}
                     </p>
                   </div>
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
                     r.is_completed
-                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
-                      : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                      ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300"
+                      : "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
                   }`}>
-                    {r.is_completed ? "Done" : "Pending"}
+                    {r.is_completed ? "done" : "pending"}
                   </span>
-                </div>
+                </li>
               ))}
-            </div>
-          ) : (
-            <p className="py-4 text-center text-sm text-zinc-400">No reminders yet</p>
-          )}
-        </CardContent>
-      </Card>
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Content collections */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Pages ({user.pages.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {user.pages.length === 0 ? (
+              <p className="py-4 text-center text-sm text-zinc-400">No pages yet</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {user.pages.map((p) => (
+                  <li key={p.id} className="flex items-center justify-between rounded border border-zinc-100 px-3 py-2 text-sm dark:border-zinc-800">
+                    <span className="truncate">{p.title || "Untitled"}</span>
+                    <span className="shrink-0 text-xs text-zinc-400">
+                      {format(new Date(p.updated_at), "MMM d")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Boards ({user.boards.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {user.boards.length === 0 ? (
+              <p className="py-4 text-center text-sm text-zinc-400">No boards yet</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {user.boards.map((b) => (
+                  <li key={b.id} className="flex items-center justify-between rounded border border-zinc-100 px-3 py-2 text-sm dark:border-zinc-800">
+                    <span className="truncate">{b.name}</span>
+                    <span className="shrink-0 text-xs text-zinc-400">
+                      {format(new Date(b.created_at), "MMM d")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="flex justify-center pt-2">
+        <Link href={`/admin/logs?user=${encodeURIComponent(user.profile.user_id as string)}`}>
+          <Button variant="outline" size="sm">
+            <MessageSquare className="mr-2 h-4 w-4" />
+            View all logs for this user
+          </Button>
+        </Link>
+      </div>
     </div>
   );
+}
+
+function StatCard({ icon, label, value, compact }: { icon: React.ReactNode; label: string; value: string; compact?: boolean }) {
+  return (
+    <Card>
+      <CardHeader className="pb-1">
+        <CardDescription className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
+          {icon}
+          {label}
+        </CardDescription>
+        <CardTitle className={compact ? "text-sm" : "text-2xl"}>{value}</CardTitle>
+      </CardHeader>
+    </Card>
+  );
+}
+
+function StatusPill({ status }: { status: string }) {
+  const tone =
+    status === "done" ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300"
+    : status === "in-progress" ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+    : status === "blocked" ? "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+    : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400";
+  return (
+    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${tone}`}>
+      {status}
+    </span>
+  );
+}
+
+function truncate(s: string | null | undefined, n: number) {
+  if (!s) return "";
+  return s.length > n ? s.slice(0, n) + "…" : s;
 }
