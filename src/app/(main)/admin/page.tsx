@@ -1,5 +1,6 @@
 import { requireAdmin, getPlatformMetrics, getAllUsers, getDailyActivity, getTaskAnalytics, getEntryAnalytics } from "@/lib/admin/actions";
 import { getWhitelist, getWhitelistRequests } from "@/lib/admin/email-actions";
+import { getAllFeedback } from "@/lib/feedback/actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdminCharts } from "@/components/admin/admin-charts";
 import { AdminTabs } from "@/components/admin/admin-tabs";
@@ -12,13 +13,14 @@ import { format } from "date-fns";
 export default async function AdminDashboard() {
   await requireAdmin();
 
-  const [metrics, users, dailyActivity, taskAnalytics, entryAnalytics, whitelist] = await Promise.all([
+  const [metrics, users, dailyActivity, taskAnalytics, entryAnalytics, whitelist, feedback] = await Promise.all([
     getPlatformMetrics(),
     getAllUsers(),
     getDailyActivity(),
     getTaskAnalytics(),
     getEntryAnalytics(),
     getWhitelist(),
+    getAllFeedback().catch(() => []),
   ]);
 
   // Try to get whitelist requests (may fail if table doesn't exist yet)
@@ -97,6 +99,7 @@ export default async function AdminDashboard() {
         dailyActivity={dailyActivity}
         taskAnalytics={taskAnalytics}
         entryAnalytics={entryAnalytics}
+        feedback={feedback}
       />
     </div>
   );

@@ -9,13 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { AdminCharts } from "@/components/admin/admin-charts";
 import { addToWhitelist, removeFromWhitelist, approveWhitelistRequest } from "@/lib/admin/email-actions";
+import { updateFeedbackStatus } from "@/lib/feedback/actions";
 import { renderWhitelistApproved, type RenderedEmail } from "@/lib/admin/preview-actions";
 import { EmailPreviewDialog } from "@/components/admin/email-preview-dialog";
 import { BroadcastComposer } from "@/components/admin/broadcast-composer";
 import { TargetedEmailComposer } from "@/components/admin/targeted-email-composer";
 import {
   Users, Shield, Mail, BarChart3, MessageSquare,
-  Plus, Trash2, Check, Loader2, Eye,
+  Plus, Trash2, Check, Loader2, Eye, Star, Bug, Lightbulb, AlertTriangle, MessageCircle,
 } from "lucide-react";
 
 const TABS = [
@@ -24,7 +25,20 @@ const TABS = [
   { id: "whitelist", label: "Whitelist", icon: Shield },
   { id: "email", label: "Send Email", icon: Mail },
   { id: "requests", label: "Access Requests", icon: MessageSquare },
+  { id: "feedback", label: "Feedback", icon: Star },
 ] as const;
+
+export interface FeedbackItem {
+  id: string;
+  user_id: string | null;
+  email: string | null;
+  name: string | null;
+  type: "bug" | "feature" | "general" | "complaint";
+  message: string;
+  rating: number | null;
+  status: "new" | "reviewed" | "resolved";
+  created_at: string;
+}
 
 type TabId = (typeof TABS)[number]["id"];
 
@@ -39,12 +53,14 @@ interface AdminTabsProps {
   dailyActivity: { date: string; entries: number; tasks: number; avgScore: number }[];
   taskAnalytics: { statuses: Record<string, number>; priorities: Record<string, number>; avgCompletionHours: number; total: number };
   entryAnalytics: { statuses: Record<string, number>; avgScore: number; totalDaysTracked: number; activeUsers: number; total: number };
+  feedback: FeedbackItem[];
 }
 
-export function AdminTabs({ users, whitelist: initialWhitelist, whitelistRequests: initialRequests, dailyActivity, taskAnalytics, entryAnalytics }: AdminTabsProps) {
+export function AdminTabs({ users, whitelist: initialWhitelist, whitelistRequests: initialRequests, dailyActivity, taskAnalytics, entryAnalytics, feedback: initialFeedback }: AdminTabsProps) {
   const [tab, setTab] = useState<TabId>("overview");
   const [whitelist, setWhitelist] = useState(initialWhitelist);
   const [requests, setRequests] = useState(initialRequests);
+  const [feedback, setFeedback] = useState(initialFeedback);
   const router = useRouter();
 
   // Whitelist state
@@ -170,6 +186,11 @@ export function AdminTabs({ users, whitelist: initialWhitelist, whitelistRequest
             {t.id === "requests" && requests.filter((r) => r.status === "pending").length > 0 && (
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
                 {requests.filter((r) => r.status === "pending").length}
+              </span>
+            )}
+            {t.id === "feedback" && feedback.filter((f) => f.status === "new").length > 0 && (
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500 text-[10px] font-bold text-white">
+                {feedback.filter((f) => f.status === "new").length}
               </span>
             )}
           </button>
@@ -382,6 +403,90 @@ export function AdminTabs({ users, whitelist: initialWhitelist, whitelistRequest
             )}
           </CardContent>
         </Card>
+        </div>
+      )}
+
+      {/* Feedback Tab */}
+      {tab === "feedback" && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>User Feedback ({feedback.length})</CardTitle>
+              <CardDescription>
+                Bug reports, feature requests, complaints, and general feedback from users.
+                Click status to cycle: new → reviewed → resolved.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {feedback.length === 0 ? (
+                <p className="py-8 text-center text-sm text-zinc-400">No feedback yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {feedback.map((f) => {
+                    const Icon = f.type === "bug" ? Bug : f.type === "feature" ? Lightbulb : f.type === "complaint" ? AlertTriangle : MessageCircle;
+                    const typeColor =
+                      f.type === "bug" ? "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30"
+                      : f.type === "feature" ? "text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30"
+                      : f.type === "complaint" ? "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30"
+                      : "text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800";
+                    const statusColor =
+                      f.status === "new" ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300"
+                      : f.status === "reviewed" ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                      : "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300";
+                    const nextStatus = f.status === "new" ? "reviewed" : f.status === "reviewed" ? "resolved" : "new";
+
+                    return (
+                      <div
+                        key={f.id}
+                        className={`rounded-lg border border-zinc-200 p-3 transition dark:border-zinc-800 ${f.status === "new" ? "bg-indigo-50/30 dark:bg-indigo-950/10" : ""}`}
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="flex min-w-0 items-start gap-2">
+                            <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${typeColor}`}>
+                              <Icon className="h-3 w-3" />
+                              {f.type}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                                {f.name || "Anonymous"}
+                                {f.email && <span className="ml-1.5 text-xs font-normal text-zinc-500">· {f.email}</span>}
+                              </p>
+                              <p className="text-[11px] text-zinc-400">
+                                {format(new Date(f.created_at), "MMM d, yyyy 'at' HH:mm")}
+                                {f.rating != null && (
+                                  <span className="ml-2 inline-flex items-center gap-0.5 text-amber-500">
+                                    {"★".repeat(f.rating)}{"☆".repeat(5 - f.rating)}
+                                    <span className="ml-0.5 text-zinc-400">{f.rating}/5</span>
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={async () => {
+                              try {
+                                await updateFeedbackStatus(f.id, nextStatus);
+                                setFeedback((prev) => prev.map((x) => x.id === f.id ? { ...x, status: nextStatus } : x));
+                              } catch {
+                                /* silent */
+                              }
+                            }}
+                            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition hover:opacity-80 ${statusColor}`}
+                            title={`Click to mark as ${nextStatus}`}
+                          >
+                            {f.status}
+                          </button>
+                        </div>
+                        <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
+                          {f.message}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
 
