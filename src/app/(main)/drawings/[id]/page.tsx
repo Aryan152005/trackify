@@ -149,7 +149,7 @@ export default function DrawingDetailPage() {
         } catch {
           setSaveStatus("unsaved");
         }
-      }, 500);
+      }, 800);
     },
     [drawingId]
   );

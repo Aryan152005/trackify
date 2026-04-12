@@ -35,7 +35,13 @@ interface TldrawWrapperProps {
  */
 export function TldrawWrapper({ initialData, onChange, remoteUpdate }: TldrawWrapperProps) {
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Set while applying a remote peer's update — suppresses echo back to peers.
+  const applyingRemoteRef = useRef(false);
+  // Throttle: fire parent's onChange at most every FRAME_MS.
+  const lastFireRef = useRef(0);
+  const trailingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRef = useRef<{ elements: unknown[]; appState: Record<string, unknown>; files: Record<string, unknown> } | null>(null);
+  const FRAME_MS = 40; // ~25 fps — smooth enough for sketching, cheap on realtime quota
   const [parsedInitial, setParsedInitial] = useState<{
     elements?: unknown[];
     appState?: Record<string, unknown>;
@@ -70,38 +76,55 @@ export function TldrawWrapper({ initialData, onChange, remoteUpdate }: TldrawWra
     }
   }, [initialData]);
 
+  // Throttled onChange — fires leading + trailing within each frame window.
+  // Skips firing while we're applying a peer's update (prevents echo loop).
   const handleChange = useCallback(
     (elements: readonly unknown[], appState: unknown, files: unknown) => {
       if (!onChange) return;
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        // Don't persist collaborators (runtime Map, serializes badly).
-        const rawAppState = (appState as Record<string, unknown>) ?? {};
-        const { collaborators: _collab, ...safeAppState } = rawAppState;
-        void _collab;
-        onChange({
-          type: "excalidraw",
-          version: 2,
-          source: "trackify",
-          elements: elements as unknown[],
-          appState: safeAppState,
-          files: files as Record<string, unknown>,
-        });
-      }, 1000);
+      if (applyingRemoteRef.current) return;
+
+      const rawAppState = (appState as Record<string, unknown>) ?? {};
+      const { collaborators: _collab, ...safeAppState } = rawAppState;
+      void _collab;
+      pendingRef.current = {
+        elements: elements as unknown[],
+        appState: safeAppState,
+        files: files as Record<string, unknown>,
+      };
+
+      const now = Date.now();
+      const elapsed = now - lastFireRef.current;
+      const fire = () => {
+        if (!pendingRef.current) return;
+        lastFireRef.current = Date.now();
+        const p = pendingRef.current;
+        pendingRef.current = null;
+        onChange({ type: "excalidraw", version: 2, source: "trackify", ...p });
+      };
+      if (elapsed >= FRAME_MS) {
+        fire();
+      } else if (!trailingRef.current) {
+        trailingRef.current = setTimeout(() => {
+          trailingRef.current = null;
+          fire();
+        }, FRAME_MS - elapsed);
+      }
     },
     [onChange]
   );
 
   useEffect(() => {
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (trailingRef.current) clearTimeout(trailingRef.current);
     };
   }, []);
 
   // Apply remote collaborator updates — ONLY elements, so each user keeps
-  // their own tool, zoom, camera position, and selection.
+  // their own tool, zoom, camera position, and selection. Suppress echo via
+  // applyingRemoteRef so our onChange doesn't broadcast the peer's update back.
   useEffect(() => {
     if (!remoteUpdate || !apiRef.current) return;
+    applyingRemoteRef.current = true;
     try {
       apiRef.current.updateScene({
         elements: (remoteUpdate.elements ?? []) as never,
@@ -109,6 +132,8 @@ export function TldrawWrapper({ initialData, onChange, remoteUpdate }: TldrawWra
     } catch {
       // ignore — scene not ready
     }
+    // Clear the flag after Excalidraw's internal onChange fires.
+    setTimeout(() => { applyingRemoteRef.current = false; }, 50);
   }, [remoteUpdate]);
 
   if (!parsedInitial) {
