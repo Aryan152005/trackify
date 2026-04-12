@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useRef, useMemo } from "react";
+import React, { useCallback, useRef, useMemo, useEffect } from "react";
 import ReactFlow, {
   Controls,
   MiniMap,
@@ -140,32 +140,43 @@ function MindMapCanvasInner({
   const onNodesChangeHandler = useCallback(
     (changes: NodeChange[]) => {
       handleNodesChange(changes);
-      // We need to get the updated nodes after the change
-      setNodes((nds) => {
-        // The state has already been updated by handleNodesChange,
-        // so we use a pass-through to read the current state
-        syncNodes(nds);
-        return nds;
-      });
     },
-    [handleNodesChange, setNodes, syncNodes]
+    [handleNodesChange]
   );
 
   const onEdgesChangeHandler = useCallback(
     (changes: EdgeChange[]) => {
       handleEdgesChange(changes);
-      setEdges((eds) => {
-        syncEdges(eds);
-        return eds;
-      });
     },
-    [handleEdgesChange, setEdges, syncEdges]
+    [handleEdgesChange]
   );
+
+  // Sync node/edge changes to parent via effects — avoids the "setState during
+  // render" warning that happens when a parent setter is called inside a child's
+  // setState updater function. Skip the first run so we don't immediately write
+  // the initial props back to the parent.
+  const isFirstNodesSync = useRef(true);
+  useEffect(() => {
+    if (isFirstNodesSync.current) {
+      isFirstNodesSync.current = false;
+      return;
+    }
+    syncNodes(nodes);
+  }, [nodes, syncNodes]);
+
+  const isFirstEdgesSync = useRef(true);
+  useEffect(() => {
+    if (isFirstEdgesSync.current) {
+      isFirstEdgesSync.current = false;
+      return;
+    }
+    syncEdges(edges);
+  }, [edges, syncEdges]);
 
   const onConnect = useCallback(
     (connection: Connection) => {
-      setEdges((eds) => {
-        const newEdges = addEdge(
+      setEdges((eds) =>
+        addEdge(
           {
             ...connection,
             type: "smoothstep",
@@ -173,12 +184,11 @@ function MindMapCanvasInner({
             style: { stroke: "#6366f1", strokeWidth: 2 },
           },
           eds
-        );
-        syncEdges(newEdges);
-        return newEdges;
-      });
+        )
+      );
+      // Parent sync happens via the useEffect below.
     },
-    [setEdges, syncEdges]
+    [setEdges]
   );
 
   const onMoveEnd = useCallback(
@@ -207,59 +217,41 @@ function MindMapCanvasInner({
       data: { label: "New Idea", color: "#6366f1" },
     };
 
-    setNodes((nds) => {
-      const updated = [...nds, newNode];
-      syncNodes(updated);
-      return updated;
-    });
-  }, [reactFlowInstance, setNodes, syncNodes]);
+    setNodes((nds) => [...nds, newNode]);
+  }, [reactFlowInstance, setNodes]);
 
   const handleDeleteSelected = useCallback(() => {
     setNodes((nds) => {
       const selected = nds.filter((n) => n.selected).map((n) => n.id);
       if (selected.length === 0) return nds;
-
       const remaining = nds.filter((n) => !n.selected);
-      syncNodes(remaining);
-
-      // Also remove edges connected to deleted nodes
-      setEdges((eds) => {
-        const remainingEdges = eds.filter(
-          (e) => !selected.includes(e.source) && !selected.includes(e.target)
-        );
-        syncEdges(remainingEdges);
-        return remainingEdges;
-      });
-
+      // Remove edges connected to deleted nodes — safe inside this setter because
+      // it only mutates child state; parent sync runs via useEffect.
+      setEdges((eds) =>
+        eds.filter((e) => !selected.includes(e.source) && !selected.includes(e.target))
+      );
       return remaining;
     });
-  }, [setNodes, setEdges, syncNodes, syncEdges]);
+  }, [setNodes, setEdges]);
 
   const handleAutoLayout = useCallback(() => {
     setNodes((nds) => {
       if (nds.length === 0) return nds;
-
       const cols = Math.ceil(Math.sqrt(nds.length));
       const spacingX = 220;
       const spacingY = 120;
-
-      const laid = nds.map((node, i) => ({
+      return nds.map((node, i) => ({
         ...node,
         position: {
           x: (i % cols) * spacingX,
           y: Math.floor(i / cols) * spacingY,
         },
       }));
-
-      syncNodes(laid);
-      return laid;
     });
-
-    // Fit the view after layout
     setTimeout(() => {
       reactFlowInstance.fitView({ padding: 0.2, duration: 300 });
     }, 50);
-  }, [setNodes, syncNodes, reactFlowInstance]);
+  }, [setNodes, reactFlowInstance]);
 
   const handleZoomFit = useCallback(() => {
     reactFlowInstance.fitView({ padding: 0.2, duration: 300 });
