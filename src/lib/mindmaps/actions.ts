@@ -1,6 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
+import { logActivity } from "@/lib/activity/actions";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -47,6 +49,14 @@ export async function createMindMap(workspaceId: string, title?: string) {
     .single();
 
   if (error) throw new Error(`Failed to create mind map: ${error.message}`);
+  await logActivity({
+    workspaceId,
+    action: "created",
+    entityType: "mindmap",
+    entityId: data.id as string,
+    entityTitle: (data.title as string) ?? "Untitled Mind Map",
+  });
+  revalidatePath("/mindmaps");
   return data;
 }
 
@@ -64,6 +74,8 @@ export async function updateMindMap(
     .single();
 
   if (error) throw new Error(`Failed to update mind map: ${error.message}`);
+  revalidatePath("/mindmaps");
+  revalidatePath(`/mindmaps/${mindmapId}`);
   return updated;
 }
 
@@ -90,12 +102,28 @@ export async function saveMindMapData(
 export async function deleteMindMap(mindmapId: string) {
   const { supabase } = await getAuthenticatedUser();
 
+  const { data: existing } = await supabase
+    .from("mindmaps")
+    .select("workspace_id, title")
+    .eq("id", mindmapId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("mindmaps")
     .delete()
     .eq("id", mindmapId);
 
   if (error) throw new Error(`Failed to delete mind map: ${error.message}`);
+  if (existing) {
+    await logActivity({
+      workspaceId: (existing.workspace_id as string) ?? null,
+      action: "deleted",
+      entityType: "mindmap",
+      entityId: mindmapId,
+      entityTitle: (existing.title as string) ?? "Untitled Mind Map",
+    });
+  }
+  revalidatePath("/mindmaps");
 }
 
 export async function getMindMap(mindmapId: string) {

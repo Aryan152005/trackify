@@ -1,6 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
+import { logActivity } from "@/lib/activity/actions";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -56,6 +58,14 @@ export async function createBoard(
   if (colError)
     throw new Error(`Failed to create default columns: ${colError.message}`);
 
+  await logActivity({
+    workspaceId,
+    action: "created",
+    entityType: "board",
+    entityId: board.id as string,
+    entityTitle: (board.name as string) ?? "Untitled Board",
+  });
+  revalidatePath("/boards");
   return board;
 }
 
@@ -73,15 +83,42 @@ export async function updateBoard(
     .single();
 
   if (error) throw new Error(`Failed to update board: ${error.message}`);
+  revalidatePath("/boards");
+  revalidatePath(`/boards/${boardId}`);
+  if (data.name) {
+    await logActivity({
+      workspaceId: (board.workspace_id as string) ?? null,
+      action: "renamed",
+      entityType: "board",
+      entityId: boardId,
+      entityTitle: data.name,
+    });
+  }
   return board;
 }
 
 export async function deleteBoard(boardId: string) {
   const { supabase } = await getAuthenticatedUser();
 
-  const { error } = await supabase.from("boards").delete().eq("id", boardId);
+  const { data: existing } = await supabase
+    .from("boards")
+    .select("workspace_id, name")
+    .eq("id", boardId)
+    .maybeSingle();
 
+  const { error } = await supabase.from("boards").delete().eq("id", boardId);
   if (error) throw new Error(`Failed to delete board: ${error.message}`);
+
+  if (existing) {
+    await logActivity({
+      workspaceId: (existing.workspace_id as string) ?? null,
+      action: "deleted",
+      entityType: "board",
+      entityId: boardId,
+      entityTitle: (existing.name as string) ?? "Untitled Board",
+    });
+  }
+  revalidatePath("/boards");
 }
 
 // ---------------------------------------------------------------------------

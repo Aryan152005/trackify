@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
 import { logActivity } from "@/lib/activity/actions";
 
 // ---------------------------------------------------------------------------
@@ -44,6 +45,7 @@ export async function createDrawing(workspaceId: string, title?: string) {
     entityId: drawing.id as string,
     entityTitle: (drawing.title as string) ?? "Untitled Drawing",
   });
+  revalidatePath("/drawings");
   return drawing;
 }
 
@@ -79,6 +81,8 @@ export async function updateDrawing(
     .single();
 
   if (error) throw new Error(`Failed to update drawing: ${error.message}`);
+  revalidatePath("/drawings");
+  revalidatePath(`/drawings/${drawingId}`);
   return drawing;
 }
 
@@ -106,6 +110,7 @@ export async function deleteDrawing(drawingId: string) {
       entityTitle: (existing.title as string) ?? "Untitled Drawing",
     });
   }
+  revalidatePath("/drawings");
 }
 
 export async function listDrawings(workspaceId: string) {

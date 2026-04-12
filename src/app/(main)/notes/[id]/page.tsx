@@ -108,6 +108,27 @@ export default function PageEditorPage() {
     fetchSidebarPages();
   }, [fetchSidebarPages]);
 
+  // Live updates: if another user renames / changes icon / archives the same
+  // page, reflect it in this tab without a manual refresh. Body content edits
+  // sync via BlockNote's own collab plug-in separately.
+  useEffect(() => {
+    if (!pageId) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`page-${pageId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "pages", filter: `id=eq.${pageId}` },
+        (payload) => {
+          const next = payload.new as Partial<Page>;
+          if (next.title !== undefined) setTitle(next.title ?? "");
+          setPage((prev) => (prev ? { ...prev, ...next } as Page : prev));
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [pageId]);
+
   // Cleanup timers on unmount
   useEffect(() => {
     return () => {
@@ -191,8 +212,8 @@ export default function PageEditorPage() {
         const newPage = await createPage(workspaceId, undefined, parentId);
         await fetchSidebarPages();
         router.push(`/notes/${newPage.id}`);
-      } catch {
-        // silent
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Couldn't create page");
       }
     },
     [workspaceId, router, fetchSidebarPages]

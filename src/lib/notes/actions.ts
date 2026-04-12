@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
 import type { Page } from "@/lib/types/page";
 
 // ---------------------------------------------------------------------------
@@ -168,6 +169,7 @@ export async function deletePage(pageId: string): Promise<void> {
     .eq("id", pageId);
 
   if (error) throw new Error(`Failed to delete page: ${error.message}`);
+  revalidatePath("/notes");
 }
 
 // ---------------------------------------------------------------------------
@@ -186,6 +188,7 @@ export async function movePage(
     .eq("id", pageId);
 
   if (error) throw new Error(`Failed to move page: ${error.message}`);
+  revalidatePath("/notes");
 }
 
 export async function getPageTree(
