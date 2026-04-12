@@ -8,6 +8,7 @@ import {
   X,
   LayoutDashboard,
   User,
+  Users,
   FileText,
   CheckSquare,
   Columns3,
@@ -59,6 +60,7 @@ const navSections = [
   {
     label: "Collaborate",
     items: [
+      { href: "/workspace/members", label: "Team Members", icon: Users },
       { href: "/requests", label: "Requests", icon: MessageSquare },
       { href: "/bookings", label: "Bookings", icon: Ticket },
       { href: "/drawings", label: "Drawings", icon: Pencil },

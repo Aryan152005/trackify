@@ -1,18 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useWorkspace, useRequireRole } from "@/lib/workspace/hooks";
+import { updateMemberRole, removeMember } from "@/lib/workspace/actions";
 import {
-  inviteMember,
-  updateMemberRole,
-  removeMember,
-} from "@/lib/workspace/actions";
+  getPendingInvitations,
+  revokeInvitation,
+  resendInvitation,
+  renderInviteEmailPayload,
+  bulkInviteMembers,
+  type PendingInvitation,
+} from "@/lib/workspace/invitations-actions";
 import { createClient } from "@/lib/supabase/client";
-import { AnimatedPage, AnimatedList, AnimatedItem } from "@/components/ui/animated-layout";
-import Link from "next/link";
-import { ArrowLeft, UserPlus, Shield, Trash2 } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/alert";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { EmailPreviewDialog } from "@/components/admin/email-preview-dialog";
+import type { RenderedEmail } from "@/lib/admin/preview-actions";
 import type { WorkspaceRole } from "@/lib/types/workspace";
+import { UserPlus, Shield, Trash2, Mail, Eye, RefreshCw, Copy, Check, Loader2 } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 
 interface MemberRow {
   id: string;
@@ -27,17 +36,22 @@ export default function WorkspaceMembersPage() {
   const { workspace } = useWorkspace();
   const isAdmin = useRequireRole("admin");
   const [members, setMembers] = useState<MemberRow[]>([]);
-  const [inviteEmail, setInviteEmail] = useState("");
+  const [pending, setPending] = useState<PendingInvitation[]>([]);
+
+  // Invite form
+  const [inviteEmails, setInviteEmails] = useState("");
   const [inviteRole, setInviteRole] = useState<"editor" | "viewer" | "admin">("editor");
   const [inviting, setInviting] = useState(false);
-  const [message, setMessage] = useState("");
+  const [result, setResult] = useState<{ type: "success" | "warn" | "error"; text: string } | null>(null);
 
-  useEffect(() => {
-    if (!workspace) return;
-    loadMembers();
-  }, [workspace]);
+  // Preview dialog
+  const [previewPayload, setPreviewPayload] = useState<RenderedEmail | null>(null);
 
-  async function loadMembers() {
+  // Per-row action state
+  const [actionId, setActionId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const loadAll = useCallback(async () => {
     if (!workspace) return;
     const supabase = createClient();
     const { data } = await supabase
@@ -45,7 +59,6 @@ export default function WorkspaceMembersPage() {
       .select("id, user_id, role, joined_at, user_profiles(name, avatar_url)")
       .eq("workspace_id", workspace.id)
       .order("joined_at", { ascending: true });
-
     if (data) {
       setMembers(
         data.map((m) => ({
@@ -58,40 +71,124 @@ export default function WorkspaceMembersPage() {
         }))
       );
     }
-  }
+    if (isAdmin) {
+      try {
+        setPending(await getPendingInvitations(workspace.id));
+      } catch {
+        /* silent */
+      }
+    }
+  }, [workspace, isAdmin]);
+
+  useEffect(() => {
+    if (!workspace) return;
+    loadAll();
+  }, [workspace, loadAll]);
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
-    if (!workspace || !inviteEmail.trim()) return;
+    if (!workspace || !inviteEmails.trim()) return;
     setInviting(true);
-    setMessage("");
+    setResult(null);
+    const emails = inviteEmails
+      .split(/[,\s\n]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (emails.length === 0) {
+      setResult({ type: "warn", text: "Enter at least one valid email." });
+      setInviting(false);
+      return;
+    }
     try {
-      const inv = await inviteMember(workspace.id, inviteEmail.trim(), inviteRole);
-      setMessage(`Invitation sent! Token: ${inv.token}`);
-      setInviteEmail("");
+      const res = await bulkInviteMembers(workspace.id, emails, inviteRole);
+      const createdCount = res.created.length;
+      const skippedCount = res.skipped.length;
+      if (createdCount > 0) {
+        setResult({
+          type: skippedCount > 0 ? "warn" : "success",
+          text: `${createdCount} invite(s) created${skippedCount > 0 ? `, ${skippedCount} skipped (${res.skipped.slice(0, 2).map((s) => `${s.email}: ${s.reason}`).join("; ")}${skippedCount > 2 ? "…" : ""})` : ""}.`,
+        });
+        setInviteEmails("");
+        await loadAll();
+        // Auto-open preview for the FIRST new invite
+        if (res.created[0]) {
+          const payload = await renderInviteEmailPayload(res.created[0].id, workspace.id);
+          setPreviewPayload(payload);
+        }
+      } else {
+        setResult({ type: "warn", text: `No invites created. ${res.skipped.map((s) => `${s.email}: ${s.reason}`).join("; ")}` });
+      }
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Failed to invite");
+      setResult({ type: "error", text: err instanceof Error ? err.message : "Failed to invite" });
     }
     setInviting(false);
+  }
+
+  async function handlePreview(inv: PendingInvitation) {
+    if (!workspace) return;
+    setActionId(inv.id);
+    try {
+      const payload = await renderInviteEmailPayload(inv.id, workspace.id);
+      setPreviewPayload(payload);
+    } catch (err) {
+      setResult({ type: "error", text: err instanceof Error ? err.message : "Preview failed" });
+    }
+    setActionId(null);
+  }
+
+  async function handleRevoke(inv: PendingInvitation) {
+    if (!workspace) return;
+    if (!confirm(`Revoke invitation for ${inv.email}?`)) return;
+    setActionId(inv.id);
+    try {
+      await revokeInvitation(inv.id, workspace.id);
+      await loadAll();
+    } catch (err) {
+      setResult({ type: "error", text: err instanceof Error ? err.message : "Revoke failed" });
+    }
+    setActionId(null);
+  }
+
+  async function handleResend(inv: PendingInvitation) {
+    if (!workspace) return;
+    setActionId(inv.id);
+    try {
+      await resendInvitation(inv.id, workspace.id);
+      await loadAll();
+      // Open the refreshed invite preview
+      const payload = await renderInviteEmailPayload(inv.id, workspace.id);
+      setPreviewPayload(payload);
+    } catch (err) {
+      setResult({ type: "error", text: err instanceof Error ? err.message : "Resend failed" });
+    }
+    setActionId(null);
+  }
+
+  async function handleCopyLink(inv: PendingInvitation) {
+    const appOrigin = typeof window !== "undefined" ? window.location.origin : "";
+    const link = `${appOrigin}/api/workspace/invite/accept?token=${inv.token}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopiedId(inv.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      setResult({ type: "error", text: "Clipboard blocked. Copy link manually from URL." });
+    }
   }
 
   async function handleRoleChange(memberId: string, role: "admin" | "editor" | "viewer") {
     try {
       await updateMemberRole(memberId, role);
-      loadMembers();
-    } catch {
-      // handle error
-    }
+      loadAll();
+    } catch { /* silent */ }
   }
 
   async function handleRemove(memberId: string) {
     if (!confirm("Remove this member?")) return;
     try {
       await removeMember(memberId);
-      loadMembers();
-    } catch {
-      // handle error
-    }
+      loadAll();
+    } catch { /* silent */ }
   }
 
   if (!workspace) return null;
@@ -104,96 +201,144 @@ export default function WorkspaceMembersPage() {
   };
 
   return (
-    <AnimatedPage>
-      <div className="mb-6">
-        <Link
-          href="/workspace"
-          className="inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to Settings
-        </Link>
-      </div>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <PageHeader
+        title="Team Members"
+        description={`${members.length} member${members.length === 1 ? "" : "s"} · ${pending.length} pending invite${pending.length === 1 ? "" : "s"}`}
+        backHref="/workspace"
+        backLabel="Back to Settings"
+      />
 
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-          Members
-        </h1>
-        <span className="text-sm text-zinc-500">{members.length} members</span>
-      </div>
+      {result && <Alert type={result.type}>{result.text}</Alert>}
 
+      {/* Invite form (admins only) */}
       {isAdmin && (
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 mb-6">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50 mb-3 flex items-center gap-2">
-            <UserPlus className="h-4 w-4" /> Invite Member
-          </h2>
-          <form onSubmit={handleInvite} className="flex flex-wrap gap-3">
-            <input
-              type="email"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              placeholder="email@example.com"
-              className="flex-1 min-w-[200px] rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
-            />
-            <Select
-              value={inviteRole}
-              onValueChange={(v) => setInviteRole(v as "admin" | "editor" | "viewer")}
-            >
-              <SelectTrigger className="w-auto">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="viewer">Viewer</SelectItem>
-                <SelectItem value="editor">Editor</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-              </SelectContent>
-            </Select>
-            <button
-              type="submit"
-              disabled={inviting}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {inviting ? "Sending..." : "Invite"}
-            </button>
-          </form>
-          {message && (
-            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{message}</p>
-          )}
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <UserPlus className="h-4 w-4" /> Invite Members
+            </CardTitle>
+            <CardDescription>
+              Enter one or more emails (comma, space, or newline separated). All get the same role.
+              An invite email opens for you to copy and send.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleInvite} className="space-y-3">
+              <textarea
+                value={inviteEmails}
+                onChange={(e) => setInviteEmails(e.target.value)}
+                placeholder={"sarah@company.com\ndev@company.com, ops@company.com"}
+                rows={3}
+                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-base text-zinc-900 placeholder-zinc-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 sm:text-sm"
+              />
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Role</label>
+                  <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as "admin" | "editor" | "viewer")}>
+                    <SelectTrigger className="w-auto"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="viewer">Viewer</SelectItem>
+                      <SelectItem value="editor">Editor</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button type="submit" disabled={inviting}>
+                  {inviting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
+                  {inviting ? "Creating…" : "Create invite(s)"}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <AnimatedList>
-          {members.map((member) => (
-            <AnimatedItem key={member.id}>
-              <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-4 last:border-b-0 dark:border-zinc-800">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-200 text-sm font-medium text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+      {/* Pending invitations */}
+      {isAdmin && pending.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Pending invitations ({pending.length})</CardTitle>
+            <CardDescription>Haven&apos;t accepted yet. Share the link manually or resend if expired.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {pending.map((inv) => {
+                const expired = new Date(inv.expires_at) < new Date();
+                const isBusy = actionId === inv.id;
+                return (
+                  <div key={inv.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                        {inv.email}
+                        <span className={`ml-2 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${roleColors[inv.role as WorkspaceRole] ?? ""}`}>
+                          {inv.role}
+                        </span>
+                        {expired && (
+                          <span className="ml-1.5 inline-block rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-300">
+                            expired
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                        Invited by {inv.inviter_name ?? "—"} ·{" "}
+                        {expired
+                          ? `expired ${formatDistanceToNow(new Date(inv.expires_at), { addSuffix: true })}`
+                          : `expires ${formatDistanceToNow(new Date(inv.expires_at), { addSuffix: true })}`}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1">
+                      <Button size="sm" variant="outline" onClick={() => handleCopyLink(inv)} title="Copy invite URL">
+                        {copiedId === inv.id ? <Check className="mr-1 h-3.5 w-3.5 text-green-600" /> : <Copy className="mr-1 h-3.5 w-3.5" />}
+                        {copiedId === inv.id ? "Copied" : "Copy link"}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => handlePreview(inv)} disabled={isBusy} title="Preview & copy email">
+                        <Eye className="mr-1 h-3.5 w-3.5" />
+                        Preview
+                      </Button>
+                      {expired && (
+                        <Button size="sm" onClick={() => handleResend(inv)} disabled={isBusy} title="Regenerate token + extend 7 days">
+                          <RefreshCw className={`mr-1 h-3.5 w-3.5 ${isBusy ? "animate-spin" : ""}`} />
+                          Resend
+                        </Button>
+                      )}
+                      <Button size="sm" variant="outline" onClick={() => handleRevoke(inv)} disabled={isBusy} className="text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Current members */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Current members</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {members.map((member) => (
+              <div key={member.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-medium text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
                     {member.name.charAt(0).toUpperCase()}
                   </div>
-                  <div>
-                    <div className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
-                      {member.name}
-                    </div>
-                    <div className="text-xs text-zinc-500">
-                      Joined {new Date(member.joined_at).toLocaleDateString()}
-                    </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">{member.name}</p>
+                    <p className="text-xs text-zinc-500">
+                      Joined {formatDistanceToNow(new Date(member.joined_at), { addSuffix: true })}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {isAdmin && member.role !== "owner" ? (
                     <>
-                      <Select
-                        value={member.role}
-                        onValueChange={(v) =>
-                          handleRoleChange(
-                            member.id,
-                            v as "admin" | "editor" | "viewer"
-                          )
-                        }
-                      >
-                        <SelectTrigger className="w-auto">
-                          <SelectValue />
-                        </SelectTrigger>
+                      <Select value={member.role} onValueChange={(v) => handleRoleChange(member.id, v as "admin" | "editor" | "viewer")}>
+                        <SelectTrigger className="w-auto"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="viewer">Viewer</SelectItem>
                           <SelectItem value="editor">Editor</SelectItem>
@@ -202,25 +347,30 @@ export default function WorkspaceMembersPage() {
                       </Select>
                       <button
                         onClick={() => handleRemove(member.id)}
-                        className="rounded-md p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                        className="rounded-md p-1.5 text-zinc-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+                        title="Remove member"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </>
                   ) : (
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${roleColors[member.role]}`}
-                    >
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${roleColors[member.role]}`}>
                       <Shield className="h-3 w-3" />
                       {member.role}
                     </span>
                   )}
                 </div>
               </div>
-            </AnimatedItem>
-          ))}
-        </AnimatedList>
-      </div>
-    </AnimatedPage>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <EmailPreviewDialog
+        open={!!previewPayload}
+        onOpenChange={(o) => !o && setPreviewPayload(null)}
+        payload={previewPayload}
+      />
+    </div>
   );
 }

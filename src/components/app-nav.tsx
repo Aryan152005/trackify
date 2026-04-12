@@ -31,6 +31,7 @@ import {
   HelpCircle,
   Star,
   Shield,
+  Users,
 } from "lucide-react";
 
 const CommandPalette = dynamic(
@@ -55,9 +56,10 @@ const moreNav = [
   { href: "/reminders", label: "Reminders", icon: Bell },
   { href: "/drawings", label: "Drawings", icon: Pencil },
   { href: "/requests", label: "Requests", icon: MessageSquare },
+  { href: "/workspace/members", label: "Team Members", icon: Users },
+  { href: "/workspace", label: "Workspace Settings", icon: Settings },
   { href: "/help", label: "Help & Guide", icon: HelpCircle },
   { href: "/feedback", label: "Feedback", icon: Star },
-  { href: "/workspace", label: "Settings", icon: Settings },
 ];
 
 export const navItems = primaryNav;
