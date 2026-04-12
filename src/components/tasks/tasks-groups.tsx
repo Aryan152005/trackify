@@ -1,9 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Search, AlertTriangle, Calendar, CalendarDays, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { TaskRow } from "@/components/tasks/task-row";
+import { BulkActionsBar } from "@/components/tasks/bulk-actions-bar";
+import { createClient } from "@/lib/supabase/client";
+import { useWorkspaceId } from "@/lib/workspace/hooks";
 import type { Task } from "@/lib/types/database";
 
 type Bucket = { key: string; label: string; desc: string; icon: React.ReactNode; tasks: Task[]; danger?: boolean };
@@ -13,10 +17,38 @@ function isoDateOnly(d: Date) {
 }
 
 export function TasksGroups({ tasks }: { tasks: Task[] }) {
+  const router = useRouter();
+  const workspaceId = useWorkspaceId();
   const [search, setSearch] = useState("");
   const [priority, setPriority] = useState<"all" | "low" | "medium" | "high">("all");
   const [status, setStatus] = useState<"all" | "pending" | "in-progress" | "done">("all");
   const [showCompleted, setShowCompleted] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Live updates: refresh the server component whenever anyone (including us)
+  // inserts/updates/deletes a task in this workspace.
+  useEffect(() => {
+    if (!workspaceId) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`tasks-${workspaceId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tasks", filter: `workspace_id=eq.${workspaceId}` },
+        () => { router.refresh(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [workspaceId, router]);
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -141,12 +173,26 @@ export function TasksGroups({ tasks }: { tasks: Task[] }) {
             <CardContent>
               <div className="space-y-2">
                 {b.tasks.map((task) => (
-                  <TaskRow key={task.id} task={task} completed={b.key === "completed"} />
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    completed={b.key === "completed"}
+                    selected={selected.has(task.id)}
+                    onToggleSelect={toggleSelect}
+                  />
                 ))}
               </div>
             </CardContent>
           </Card>
         ))
+      )}
+
+      {selected.size > 0 && workspaceId && (
+        <BulkActionsBar
+          selectedTaskIds={Array.from(selected)}
+          workspaceId={workspaceId}
+          onComplete={() => { setSelected(new Set()); router.refresh(); }}
+        />
       )}
     </div>
   );

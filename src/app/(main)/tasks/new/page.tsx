@@ -2,14 +2,16 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { useWorkspaceId } from "@/lib/workspace/hooks";
+import { createTask } from "@/lib/tasks/actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
+import { TaskLabels } from "@/components/tasks/task-labels";
 import type { TaskPriority } from "@/lib/types/database";
+import type { Label } from "@/lib/types/board";
 import { toast } from "sonner";
 
 export default function NewTaskPage() {
@@ -18,10 +20,10 @@ export default function NewTaskPage() {
   const [dueDate, setDueDate] = useState("");
   const [dueTime, setDueTime] = useState("");
   const [priority, setPriority] = useState<TaskPriority>("medium");
+  const [labels, setLabels] = useState<Label[]>([]);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const workspaceId = useWorkspaceId();
-  const supabase = createClient();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -33,31 +35,16 @@ export default function NewTaskPage() {
     setLoading(true);
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error("Not authenticated");
-        return;
-      }
-
-      const { error: insertError } = await supabase.from("tasks").insert({
-        user_id: user.id,
-        workspace_id: workspaceId,
-        title: title.trim(),
+      await createTask({
+        title,
         description: description.trim() || null,
         due_date: dueDate || null,
         due_time: dueTime || null,
         priority,
-        status: "pending",
+        workspaceId: workspaceId ?? null,
+        labels,
       });
-
-      if (insertError) {
-        toast.error(insertError.message);
-        return;
-      }
-
-      toast.success("Task created");
+      toast.success(dueDate ? "Task created — reminder scheduled" : "Task created");
       router.push("/tasks");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Something went wrong");
@@ -159,6 +146,13 @@ export default function NewTaskPage() {
                     <SelectItem value="high">High</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Labels</label>
+              <div className="mt-2">
+                <TaskLabels labels={labels} onChange={setLabels} />
               </div>
             </div>
 

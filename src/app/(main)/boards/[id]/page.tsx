@@ -203,6 +203,27 @@ export default function BoardDetailPage() {
     fetchMembers();
   }, [fetchMembers]);
 
+  // Live updates: any insert/update/delete on board_columns or tasks
+  // belonging to this board triggers a re-fetch so peers see each other's moves.
+  useEffect(() => {
+    if (!boardId) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`board-${boardId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "board_columns", filter: `board_id=eq.${boardId}` },
+        () => { fetchBoard(); }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tasks", filter: `board_id=eq.${boardId}` },
+        () => { fetchBoard(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [boardId, fetchBoard]);
+
   // -------------------------------------------------------------------------
   // DnD sensors
   // -------------------------------------------------------------------------

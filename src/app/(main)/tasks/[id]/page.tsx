@@ -10,6 +10,7 @@ import { TaskActions } from "@/components/tasks/task-actions";
 import { SubtaskList } from "@/components/tasks/subtask-list";
 import { TaskDependencies } from "@/components/tasks/task-dependencies";
 import { CollaborationToolbar } from "@/components/collaboration/collaboration-toolbar";
+import { RealtimeRefresh } from "@/components/shared/realtime-refresh";
 import { AlertTriangle } from "lucide-react";
 
 export default async function TaskDetailPage({ params }: { params: { id: string } }) {
@@ -36,6 +37,7 @@ export default async function TaskDetailPage({ params }: { params: { id: string 
 
   return (
     <div className="space-y-6">
+      <RealtimeRefresh table="tasks" id={params.id} />
       <PageHeader
         title={task.title}
         backHref="/tasks"

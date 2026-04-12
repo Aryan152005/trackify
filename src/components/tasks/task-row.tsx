@@ -12,14 +12,19 @@ import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { updateTaskStatus, updateTask, deleteTask } from "@/lib/tasks/actions";
+import { TaskLabels } from "@/components/tasks/task-labels";
 import type { Task, TaskPriority } from "@/lib/types/database";
+import type { Label } from "@/lib/types/board";
 
 interface Props {
   task: Task;
   completed?: boolean;
+  /** When defined, shows a selection checkbox for bulk actions. */
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
-export function TaskRow({ task, completed = false }: Props) {
+export function TaskRow({ task, completed = false, selected, onToggleSelect }: Props) {
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState<null | "toggle" | "save" | "delete">(null);
   const [optimisticDone, setOptimisticDone] = useState(completed);
@@ -31,6 +36,8 @@ export function TaskRow({ task, completed = false }: Props) {
   const [description, setDescription] = useState(task.description ?? "");
   const [priority, setPriority] = useState<TaskPriority>(task.priority);
   const [dueDate, setDueDate] = useState<string | undefined>(task.due_date ?? undefined);
+  const initialLabels = (task as Task & { labels?: Label[] }).labels ?? [];
+  const [labels, setLabels] = useState<Label[]>(initialLabels);
 
   function handleToggle() {
     if (busy) return;
@@ -60,6 +67,7 @@ export function TaskRow({ task, completed = false }: Props) {
           description: description.trim() || null,
           priority,
           due_date: dueDate || null,
+          labels,
         });
         toast.success("Task updated");
         setEditing(false);
@@ -120,6 +128,10 @@ export function TaskRow({ task, completed = false }: Props) {
               <DatePicker value={dueDate} onChange={setDueDate} placeholder="No due date" />
             </div>
           </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Labels</label>
+            <TaskLabels labels={labels} onChange={setLabels} />
+          </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button variant="outline" size="sm" onClick={() => setEditing(false)} disabled={pending}>
               Cancel
@@ -139,9 +151,20 @@ export function TaskRow({ task, completed = false }: Props) {
       <div
         className={`group flex items-start gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 transition hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-800/60 dark:hover:bg-zinc-800 ${
           optimisticDone ? "opacity-70" : ""
-        }`}
+        } ${selected ? "ring-2 ring-indigo-500" : ""}`}
       >
-        {/* Checkbox */}
+        {/* Selection checkbox for bulk ops (only when onToggleSelect is provided) */}
+        {onToggleSelect && (
+          <input
+            type="checkbox"
+            checked={!!selected}
+            onChange={() => onToggleSelect(task.id)}
+            aria-label={`Select ${task.title}`}
+            className="mt-1 h-4 w-4 shrink-0 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-800"
+          />
+        )}
+
+        {/* Done checkbox */}
         <button
           type="button"
           onClick={handleToggle}
@@ -186,6 +209,11 @@ export function TaskRow({ task, completed = false }: Props) {
             <p className="mt-1 text-xs text-zinc-400">
               Completed {format(parseISO(task.completed_at), "MMM d, yyyy")}
             </p>
+          )}
+          {initialLabels.length > 0 && (
+            <div className="mt-1.5">
+              <TaskLabels labels={initialLabels} onChange={() => {}} readOnly small />
+            </div>
           )}
         </div>
 

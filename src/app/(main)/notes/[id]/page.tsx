@@ -129,6 +129,22 @@ export default function PageEditorPage() {
     return () => { supabase.removeChannel(channel); };
   }, [pageId]);
 
+  // Live page-tree updates: any create/rename/archive/delete by anyone in the
+  // current workspace refreshes the sidebar list.
+  useEffect(() => {
+    if (!workspaceId) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`pages-sidebar-${workspaceId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "pages", filter: `workspace_id=eq.${workspaceId}` },
+        () => { fetchSidebarPages(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [workspaceId, fetchSidebarPages]);
+
   // Cleanup timers on unmount
   useEffect(() => {
     return () => {
