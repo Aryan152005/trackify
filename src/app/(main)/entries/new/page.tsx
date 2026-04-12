@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { AddEntryForm } from "./add-entry-form";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default async function NewEntryPage() {
   const supabase = await createClient();
@@ -12,15 +13,13 @@ export default async function NewEntryPage() {
   const { data: tags } = await supabase.from("tags").select("id, name, color").order("name");
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-          Add work entry
-        </h1>
-        <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-          Log what you did, learned, and plan next
-        </p>
-      </div>
+    <div className="mx-auto max-w-5xl">
+      <PageHeader
+        title="Add work entry"
+        description="Log what you did, learned, and plan next"
+        backHref="/entries"
+        backLabel="Back to Entries"
+      />
       <AddEntryForm userId={user.id} tags={tags ?? []} />
     </div>
   );

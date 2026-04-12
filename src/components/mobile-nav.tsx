@@ -134,7 +134,7 @@ export function MobileNav() {
       {/* Drawer */}
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-white shadow-2xl transition-transform duration-200 ease-out dark:bg-zinc-900 md:hidden",
+          "fixed left-0 top-0 z-50 flex h-screen h-[100dvh] w-72 max-w-[85vw] flex-col bg-white shadow-2xl transition-transform duration-200 ease-out dark:bg-zinc-900 md:hidden",
           open ? "translate-x-0" : "-translate-x-full"
         )}
         role="dialog"
@@ -151,11 +151,11 @@ export function MobileNav() {
           </button>
         </div>
 
-        <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+        <div className="shrink-0 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
           <WorkspaceSwitcher />
         </div>
 
-        <nav className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 pb-[env(safe-area-inset-bottom)]">
+        <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
           {navSections.map((section, si) => (
             <div key={si} className={cn(si > 0 && "mt-4")}>
               {section.label && (
