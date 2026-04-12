@@ -15,6 +15,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { AnimatedPage } from "@/components/ui/animated-layout";
 import { Plus, LayoutDashboard, Columns3 } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
+import { SharedSection } from "@/components/collaboration/shared-section";
 
 export default async function BoardsPage() {
   const supabase = await createClient();
@@ -112,6 +113,8 @@ export default async function BoardsPage() {
             actionHref="/boards/new"
           />
         )}
+
+        <SharedSection entityType="board" />
       </div>
     </AnimatedPage>
   );

@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Target, Plus, Columns3, Map, CheckCircle2, Calendar } from "lucide-react";
+import { SharedSection } from "@/components/collaboration/shared-section";
 import { formatDistanceToNow } from "date-fns";
 
 const MODE_ICONS = { habit: CheckCircle2, kanban: Columns3, roadmap: Map };
@@ -79,6 +80,8 @@ export default async function ChallengesPage() {
           })}
         </CardContent>
       </Card>
+
+      <SharedSection entityType="challenge" />
     </div>
   );
 }

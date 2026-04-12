@@ -4,6 +4,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { FileText } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
+import { SharedSection } from "@/components/collaboration/shared-section";
 
 export default async function EntriesPage() {
   const supabase = await createClient();
@@ -134,6 +135,8 @@ export default async function EntriesPage() {
           actionHref="/entries/new"
         />
       )}
+
+      <SharedSection entityType="entry" />
     </div>
   );
 }

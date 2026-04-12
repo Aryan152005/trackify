@@ -14,6 +14,7 @@ import {
 import { Plus, Pencil } from "lucide-react";
 import { createDrawing } from "@/lib/drawings/actions";
 import { EmptyState } from "@/components/ui/empty-state";
+import { SharedSection } from "@/components/collaboration/shared-section";
 
 export default async function DrawingsPage() {
   const supabase = await createClient();
@@ -112,6 +113,8 @@ export default async function DrawingsPage() {
             </form>
           </EmptyState>
         )}
+
+        <SharedSection entityType="drawing" />
       </div>
     </AnimatedPage>
   );

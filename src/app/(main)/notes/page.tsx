@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { AnimatedPage, AnimatedList, AnimatedItem } from "@/components/ui/animated-layout";
 import { Plus, FileText, StickyNote } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
+import { SharedSection } from "@/components/collaboration/shared-section";
 
 export default async function NotesPage() {
   const supabase = await createClient();
@@ -99,6 +100,8 @@ export default async function NotesPage() {
             actionHref="/notes/new"
           />
         )}
+
+        <SharedSection entityType="page" />
       </div>
     </AnimatedPage>
   );

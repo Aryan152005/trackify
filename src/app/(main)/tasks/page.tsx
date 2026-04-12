@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { TaskRow } from "@/components/tasks/task-row";
 import { Plus, CheckSquare } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
+import { SharedSection } from "@/components/collaboration/shared-section";
 
 export default async function TasksPage() {
   const supabase = await createClient();
@@ -110,6 +111,8 @@ export default async function TasksPage() {
       )}
       </>
       )}
+
+      <SharedSection entityType="task" />
     </div>
   );
 }

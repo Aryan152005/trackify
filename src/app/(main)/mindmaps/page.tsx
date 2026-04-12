@@ -14,6 +14,7 @@ import {
 import { Plus, Brain, Sparkles } from "lucide-react";
 import { createMindMap } from "@/lib/mindmaps/actions";
 import { EmptyState } from "@/components/ui/empty-state";
+import { SharedSection } from "@/components/collaboration/shared-section";
 
 export default async function MindMapsPage() {
   const supabase = await createClient();
@@ -125,6 +126,8 @@ export default async function MindMapsPage() {
             </form>
           </EmptyState>
         )}
+
+        <SharedSection entityType="mindmap" />
       </div>
     </AnimatedPage>
   );
