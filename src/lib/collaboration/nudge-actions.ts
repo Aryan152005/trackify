@@ -40,15 +40,16 @@ export async function listWorkspaceTeammates(workspaceId: string): Promise<Membe
     });
 }
 
-type EntityKind = "page" | "task" | "board" | "entry" | "drawing" | "mindmap";
+type EntityKind = "page" | "task" | "board" | "entry" | "drawing" | "mindmap" | "challenge";
 
 const ENTITY_URL: Record<EntityKind, (id: string) => string> = {
   page: (id) => `/notes/${id}`,
   task: (id) => `/tasks/${id}`,
   board: (id) => `/boards/${id}`,
-  entry: () => `/entries`,
+  entry: (id) => `/entries/${id}`,
   drawing: (id) => `/drawings/${id}`,
   mindmap: (id) => `/mindmaps/${id}`,
+  challenge: (id) => `/challenges/${id}`,
 };
 
 /**

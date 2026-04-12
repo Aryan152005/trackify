@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { listChallenges, computeStats, currentDayIndex, type Challenge } from "@/lib/challenges/actions";
+import { listChallenges } from "@/lib/challenges/actions";
+import { computeStats, currentDayIndex } from "@/lib/challenges/helpers";
+import type { Challenge } from "@/lib/challenges/types";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

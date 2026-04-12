@@ -8,6 +8,9 @@ function getTableName(entityType: string): string | null {
     board: "boards",
     task: "tasks",
     entry: "work_entries",
+    drawing: "drawings",
+    mindmap: "mindmaps",
+    challenge: "challenges",
   };
   return tableMap[entityType] ?? null;
 }

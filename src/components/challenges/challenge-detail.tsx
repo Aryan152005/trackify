@@ -6,7 +6,7 @@ import { format, parseISO, addDays } from "date-fns";
 import { toast } from "sonner";
 import {
   Check, Plus, Pencil, Trash2, Copy, CornerDownRight, CheckCircle2,
-  Target, Flame, Calendar as CalIcon, Columns3, Map, Loader2, X,
+  Target, Flame, Calendar as CalIcon, Columns3, Map, X,
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,9 +15,11 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import * as Popover from "@radix-ui/react-popover";
 import {
   updateDay, archiveChallenge, deleteChallenge, renameChallenge,
-  currentDayIndex, computeStats,
-  type Challenge, type ChallengeDay, type HabitDay, type KanbanDay, type RoadmapDay, type ChallengeTask,
 } from "@/lib/challenges/actions";
+import { currentDayIndex, computeStats } from "@/lib/challenges/helpers";
+import type {
+  Challenge, ChallengeDay, HabitDay, KanbanDay, RoadmapDay, ChallengeTask,
+} from "@/lib/challenges/types";
 
 // ─── Helpers ─────────────────────────────────────────────────────
 function randId() {
@@ -39,6 +41,7 @@ export function ChallengeDetail({ initialChallenge }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(challenge.title);
+  const [filter, setFilter] = useState<"all" | "pending" | "done">("all");
 
   const today = currentDayIndex(challenge);
   const { done, total, streak } = useMemo(() => computeStats(challenge), [challenge]);
@@ -196,12 +199,33 @@ export function ChallengeDetail({ initialChallenge }: Props) {
         <Stat icon={modeIcon(challenge.mode)} label="Mode" value={challenge.mode} hint={`${challenge.duration_days}-day challenge`} />
       </div>
 
+      {/* Filter tabs (kanban/roadmap only — habit uses the grid) */}
+      {challenge.mode !== "habit" && (
+        <div className="flex items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50 p-1 text-xs dark:border-zinc-800 dark:bg-zinc-900">
+          {(["all", "pending", "done"] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setFilter(k)}
+              className={`flex-1 rounded-md px-3 py-1.5 font-medium capitalize transition ${
+                filter === k
+                  ? "bg-white text-indigo-700 shadow-sm dark:bg-zinc-800 dark:text-indigo-300"
+                  : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
+              }`}
+            >
+              {k === "all" ? `All (${total})` : k === "pending" ? `Pending (${total - done})` : `Done (${done})`}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Mode-specific renderers */}
       {challenge.mode === "habit" && <HabitGrid challenge={challenge} today={today} patchDay={patchDay} />}
       {challenge.mode === "kanban" && (
         <KanbanDays
           challenge={challenge}
           today={today}
+          filter={filter}
           patchDay={patchDay}
           onCopyFromTo={copyDayFromTo}
           onApplyToAll={applyDayToAllRemaining}
@@ -211,6 +235,7 @@ export function ChallengeDetail({ initialChallenge }: Props) {
         <RoadmapDays
           challenge={challenge}
           today={today}
+          filter={filter}
           patchDay={patchDay}
           onCopyFromTo={copyDayFromTo}
           onApplyToAll={applyDayToAllRemaining}
@@ -293,21 +318,34 @@ function HabitGrid({ challenge, today, patchDay }: { challenge: Challenge; today
 
 // ─── KANBAN per-day tasks ────────────────────────────────────────
 function KanbanDays({
-  challenge, today, patchDay, onCopyFromTo, onApplyToAll,
+  challenge, today, filter, patchDay, onCopyFromTo, onApplyToAll,
 }: {
-  challenge: Challenge; today: number;
+  challenge: Challenge; today: number; filter: "all" | "pending" | "done";
   patchDay: (i: number, n: ChallengeDay) => void;
   onCopyFromTo: (from: number, to: number) => void;
   onApplyToAll: (from: number) => void;
 }) {
+  const visible = challenge.days
+    .map((d, i) => ({ d: d as KanbanDay, i }))
+    .filter(({ d }) => {
+      if (filter === "all") return true;
+      const tasks = d.tasks ?? [];
+      const allDone = tasks.length > 0 && tasks.every((t) => t.done);
+      return filter === "done" ? allDone : !allDone;
+    });
+
+  if (visible.length === 0) {
+    return <p className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50/50 py-10 text-center text-xs text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/40">No days match this filter.</p>;
+  }
+
   return (
-    <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
-      {challenge.days.map((d, i) => (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {visible.map(({ d, i }) => (
         <DayKanbanCard
           key={i}
           index={i}
           today={today}
-          day={d as KanbanDay}
+          day={d}
           challenge={challenge}
           onChange={(n) => patchDay(i, n)}
           onCopyFrom={(from) => onCopyFromTo(from, i)}
@@ -371,15 +409,17 @@ function DayKanbanCard({
         {tasks.length === 0 && (
           <p className="text-xs italic text-zinc-400">No tasks yet. Add one below, or copy from another day.</p>
         )}
-        {tasks.map((t) => (
-          <KanbanTaskRow
-            key={t.id}
-            task={t}
-            onToggle={() => toggleTask(t.id)}
-            onRename={(title) => renameTask(t.id, title)}
-            onRemove={() => removeTask(t.id)}
-          />
-        ))}
+        <div className="max-h-60 space-y-1 overflow-y-auto pr-1">
+          {tasks.map((t) => (
+            <KanbanTaskRow
+              key={t.id}
+              task={t}
+              onToggle={() => toggleTask(t.id)}
+              onRename={(title) => renameTask(t.id, title)}
+              onRemove={() => removeTask(t.id)}
+            />
+          ))}
+        </div>
         <div className="flex gap-1.5 pt-1">
           <input
             value={newTitle}
@@ -533,21 +573,27 @@ function DayActionsMenu({
 
 // ─── ROADMAP per-day goals ───────────────────────────────────────
 function RoadmapDays({
-  challenge, today, patchDay, onCopyFromTo, onApplyToAll,
+  challenge, today, filter, patchDay, onCopyFromTo, onApplyToAll,
 }: {
-  challenge: Challenge; today: number;
+  challenge: Challenge; today: number; filter: "all" | "pending" | "done";
   patchDay: (i: number, n: ChallengeDay) => void;
   onCopyFromTo: (from: number, to: number) => void;
   onApplyToAll: (from: number) => void;
 }) {
+  const visible = challenge.days
+    .map((d, i) => ({ d: d as RoadmapDay, i }))
+    .filter(({ d }) => filter === "all" ? true : filter === "done" ? d.done : !d.done);
+  if (visible.length === 0) {
+    return <p className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50/50 py-10 text-center text-xs text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/40">No days match this filter.</p>;
+  }
   return (
     <div className="space-y-2">
-      {challenge.days.map((d, i) => (
+      {visible.map(({ d, i }) => (
         <RoadmapDayRow
           key={i}
           index={i}
           today={today}
-          day={d as RoadmapDay}
+          day={d}
           challenge={challenge}
           onChange={(n) => patchDay(i, n)}
           onCopyFrom={(from) => onCopyFromTo(from, i)}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Globe, Lock, FileText, ClipboardList, Columns, BookOpen } from "lucide-react";
+import { Globe, Lock, FileText, ClipboardList, Columns, BookOpen, Pencil as DrawIcon, Brain, Target } from "lucide-react";
 import { BlockNoteReadOnly } from "@/components/shared/blocknote-readonly";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
@@ -20,7 +20,10 @@ const ENTITY_APP_URL: Record<string, (id: string) => string> = {
   page: (id) => `/notes/${id}`,
   task: (id) => `/tasks/${id}`,
   board: (id) => `/boards/${id}`,
-  entry: () => `/entries`,
+  entry: (id) => `/entries/${id}`,
+  drawing: (id) => `/drawings/${id}`,
+  mindmap: (id) => `/mindmaps/${id}`,
+  challenge: (id) => `/challenges/${id}`,
 };
 
 const ENTITY_ICONS: Record<string, React.ReactNode> = {
@@ -28,6 +31,9 @@ const ENTITY_ICONS: Record<string, React.ReactNode> = {
   task: <ClipboardList className="h-5 w-5" />,
   board: <Columns className="h-5 w-5" />,
   entry: <BookOpen className="h-5 w-5" />,
+  drawing: <DrawIcon className="h-5 w-5" />,
+  mindmap: <Brain className="h-5 w-5" />,
+  challenge: <Target className="h-5 w-5" />,
 };
 
 const ENTITY_LABELS: Record<string, string> = {
@@ -35,6 +41,9 @@ const ENTITY_LABELS: Record<string, string> = {
   task: "Task",
   board: "Board",
   entry: "Entry",
+  drawing: "Drawing",
+  mindmap: "Mind map",
+  challenge: "Challenge",
 };
 
 function SharedPageContent({ entity, entityType }: { entity: Record<string, unknown>; entityType: string }) {
@@ -127,6 +136,87 @@ function SharedPageContent({ entity, entityType }: { entity: Record<string, unkn
           )}
         </div>
       );
+
+    case "drawing":
+      return (
+        <div className="space-y-4">
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+            {(entity.title as string) || "Untitled Drawing"}
+          </h1>
+          {!!entity.thumbnail_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={entity.thumbnail_url as string}
+              alt={(entity.title as string) || "Drawing"}
+              className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800"
+            />
+          )}
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-6 text-center text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-400">
+            Open in the full app to edit or collaborate on this drawing.
+          </div>
+        </div>
+      );
+
+    case "mindmap":
+      return (
+        <div className="space-y-4">
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+            {(entity.title as string) || "Untitled Mind Map"}
+          </h1>
+          {!!entity.description && (
+            <p className="text-sm text-zinc-700 dark:text-zinc-300">
+              {entity.description as string}
+            </p>
+          )}
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-6 text-center text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-400">
+            Mind-map view is interactive — open in the full app to explore.
+          </div>
+        </div>
+      );
+
+    case "challenge": {
+      const duration = (entity.duration_days as number) ?? 21;
+      const mode = (entity.mode as string) ?? "habit";
+      const days = Array.isArray(entity.days) ? (entity.days as Record<string, unknown>[]) : [];
+      const doneCount = days.filter((d) => {
+        if (mode === "habit" || mode === "roadmap") return !!d.done;
+        const tasks = Array.isArray(d.tasks) ? (d.tasks as { done: boolean }[]) : [];
+        return tasks.length > 0 && tasks.every((t) => t.done);
+      }).length;
+      const pct = duration ? Math.round((doneCount / duration) * 100) : 0;
+      return (
+        <div className="space-y-4">
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+            {(entity.title as string) || "Untitled Challenge"}
+          </h1>
+          <div className="flex flex-wrap gap-2 text-xs">
+            <span className="rounded-full bg-indigo-100 px-3 py-1 font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 capitalize">
+              {mode}
+            </span>
+            <span className="rounded-full bg-zinc-100 px-3 py-1 font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+              {duration} days
+            </span>
+            <span className="rounded-full bg-emerald-100 px-3 py-1 font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+              {doneCount}/{duration} · {pct}%
+            </span>
+          </div>
+          {!!entity.description && (
+            <p className="text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
+              {entity.description as string}
+            </p>
+          )}
+          <div className="h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+            <div
+              className="h-full bg-gradient-to-r from-indigo-500 to-purple-500"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-6 text-center text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-zinc-400">
+            Open in the full app to check off days or collaborate.
+          </div>
+        </div>
+      );
+    }
 
     default:
       return (

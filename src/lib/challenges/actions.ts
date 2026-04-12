@@ -2,30 +2,9 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-
-export type ChallengeMode = "habit" | "kanban" | "roadmap";
-
-export interface ChallengeTask { id: string; title: string; done: boolean }
-export interface HabitDay { done: boolean; note?: string }
-export interface KanbanDay { tasks: ChallengeTask[] }
-export interface RoadmapDay { goals: string[]; done: boolean; note?: string }
-
-export type ChallengeDay = HabitDay | KanbanDay | RoadmapDay;
-
-export interface Challenge {
-  id: string;
-  user_id: string;
-  workspace_id: string | null;
-  mode: ChallengeMode;
-  title: string;
-  description: string | null;
-  started_at: string;
-  duration_days: number;
-  days: ChallengeDay[];
-  is_archived: boolean;
-  created_at: string;
-  updated_at: string;
-}
+import type {
+  Challenge, ChallengeDay, ChallengeMode, HabitDay, KanbanDay, RoadmapDay,
+} from "./types";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -129,39 +108,4 @@ export async function renameChallenge(id: string, title: string) {
   revalidatePath(`/challenges/${id}`);
 }
 
-/** Helpers */
-export function currentDayIndex(c: Challenge): number {
-  const start = new Date(c.started_at);
-  start.setHours(0, 0, 0, 0);
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const diff = Math.floor((now.getTime() - start.getTime()) / (24 * 3600 * 1000));
-  return Math.max(0, Math.min(c.duration_days - 1, diff));
-}
-
-export function computeStats(c: Challenge): { done: number; total: number; streak: number } {
-  const total = c.duration_days;
-  let done = 0;
-  for (const d of c.days) {
-    if (c.mode === "habit" && (d as HabitDay).done) done++;
-    else if (c.mode === "roadmap" && (d as RoadmapDay).done) done++;
-    else if (c.mode === "kanban") {
-      const tasks = (d as KanbanDay).tasks ?? [];
-      if (tasks.length > 0 && tasks.every((t) => t.done)) done++;
-    }
-  }
-  // Streak: consecutive completed days ending at today (or the last completed day)
-  let streak = 0;
-  const today = currentDayIndex(c);
-  for (let i = today; i >= 0; i--) {
-    const d = c.days[i];
-    const dayDone =
-      c.mode === "habit" ? (d as HabitDay).done
-      : c.mode === "roadmap" ? (d as RoadmapDay).done
-      : c.mode === "kanban" ? ((d as KanbanDay).tasks?.length ?? 0) > 0 && (d as KanbanDay).tasks.every((t) => t.done)
-      : false;
-    if (dayDone) streak++;
-    else break;
-  }
-  return { done, total, streak };
-}
+export type { Challenge, ChallengeDay, ChallengeMode, ChallengeTask, HabitDay, KanbanDay, RoadmapDay } from "./types";

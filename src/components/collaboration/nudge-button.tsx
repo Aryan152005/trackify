@@ -8,7 +8,7 @@ import { listWorkspaceTeammates, nudgeTeammate } from "@/lib/collaboration/nudge
 import { useWorkspaceId } from "@/lib/workspace/hooks";
 
 interface Props {
-  entityType: "page" | "task" | "board" | "entry" | "drawing" | "mindmap";
+  entityType: "page" | "task" | "board" | "entry" | "drawing" | "mindmap" | "challenge";
   entityId: string;
   entityTitle: string;
 }
