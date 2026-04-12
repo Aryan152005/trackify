@@ -2,10 +2,11 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
+import { Button } from "@/components/ui/button";
 import {
   FileText, CheckSquare, Columns3, StickyNote, BarChart3,
   Bell, Users, Brain, Calendar, FileDown, Pencil, Shield,
-  Keyboard, HelpCircle,
+  Keyboard, HelpCircle, Sparkles, Mail, Activity, Rocket,
 } from "lucide-react";
 
 const guides = [
@@ -41,21 +42,63 @@ const guides = [
     ],
   },
   {
+    category: "Smart & Automated",
+    items: [
+      { icon: Sparkles, title: "Smart Mindmap", steps: ["Open Mind Maps > Smart Mindmap", "Auto-generated from your tasks, reminders, entries, notes", "Hover a node to dim others; see only its connections", "Click a suggestion to auto-link related items (set due date, create reminder, etc.)"] },
+      { icon: Bell, title: "Push Notifications", steps: ["Click Enable notifications in the banner at the top, OR go to Reminders", "Grant browser permission when asked", "Repeat on each device (laptop, phone, tablet)", "Reminders fire on ALL your devices even when the app is closed"] },
+      { icon: Activity, title: "Admin · System Logs", steps: ["Admins only: go to Admin > System Logs", "Filter by service, level (error/warn/info), tag, time range, or search", "CSV export of any filtered view", "Live tail toggle streams events in realtime"] },
+    ],
+  },
+  {
     category: "Pro Tips",
     items: [
       { icon: Keyboard, title: "Keyboard Shortcuts", steps: ["Press Cmd/Ctrl + K to open the command palette", "Search for any page, task, or board instantly", "Use Ctrl+Enter to submit comments", "Press / in the notes editor for block commands"] },
-      { icon: Pencil, title: "Drawings", steps: ["Go to Drawings to create freeform canvases", "Use the full tldraw editor — shapes, text, arrows", "Great for diagrams, wireframes, and visual thinking", "Auto-saves as you draw"] },
+      { icon: Pencil, title: "Drawings", steps: ["Go to Drawings to create freeform canvases", "Excalidraw-powered: shapes, arrows, text, colors, freehand", "Great for diagrams, wireframes, sketches", "Auto-saves as you draw"] },
+      { icon: Mail, title: "Manual Email Sending", steps: ["Open any Whitelist entry or Invite > Preview", "Click Copy HTML — preserves logo, buttons, design", "Paste into Gmail / Outlook / Apple Mail compose", "Subject and recipient have their own Copy buttons"] },
     ],
   },
 ];
 
 export default function HelpPage() {
+  function restartTour() {
+    window.dispatchEvent(new CustomEvent("trackify:open-tour"));
+  }
+
   return (
     <div className="space-y-8">
       <PageHeader
         title="Help & Guide"
         description="Learn how to get the most out of Trackify"
+        actions={
+          <Button onClick={restartTour} variant="outline">
+            <Rocket className="mr-2 h-4 w-4" />
+            Restart walkthrough
+          </Button>
+        }
       />
+
+      {/* Hero — interactive tour */}
+      <Card className="overflow-hidden border-indigo-200 dark:border-indigo-900/50">
+        <div className="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-6 text-white">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 backdrop-blur">
+                <Sparkles className="h-6 w-6" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold">Interactive walkthrough</h2>
+                <p className="text-sm text-white/85">
+                  A 2-minute tour through every feature. Start here if you&apos;re new.
+                </p>
+              </div>
+            </div>
+            <Button onClick={restartTour} className="bg-white text-indigo-600 hover:bg-white/90">
+              <Rocket className="mr-2 h-4 w-4" />
+              Start tour
+            </Button>
+          </div>
+        </div>
+      </Card>
 
       {guides.map((section) => (
         <div key={section.category}>
