@@ -13,6 +13,7 @@ import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { MentionsPopover } from "@/components/collaboration/mentions-popover";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { TimerNavIndicator } from "@/components/timer/timer-nav-indicator";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import dynamic from "next/dynamic";
 import {
@@ -61,7 +62,7 @@ const moreNav = [
   { href: "/drawings", label: "Drawings", icon: Pencil },
   { href: "/requests", label: "Requests", icon: MessageSquare },
   { href: "/workspace/members", label: "Team Members", icon: Users },
-  { href: "/workspace", label: "Workspace Settings", icon: Settings },
+  { href: "/settings", label: "Settings", icon: Settings },
   { href: "/help", label: "Help & Guide", icon: HelpCircle },
   { href: "/feedback", label: "Feedback", icon: Star },
 ];
@@ -174,6 +175,7 @@ export function AppNav({ isAdmin = false }: { isAdmin?: boolean }) {
         </nav>
         {/* Right: utility icons + user */}
         <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+          <TimerNavIndicator />
           <ThemeToggle />
           <NotificationBell />
           <MentionsPopover />

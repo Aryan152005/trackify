@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspaceId } from "@/lib/workspace/hooks";
 import { Play, Pause, Square } from "lucide-react";
+import { setActiveTimer, getActiveTimer, subscribeTimer } from "@/lib/timer/store";
 
 export function TimerWidget() {
   const [seconds, setSeconds] = useState(0);
@@ -13,6 +14,27 @@ export function TimerWidget() {
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const workspaceId = useWorkspaceId();
+
+  // On mount, rehydrate from global store if a timer is already running
+  useEffect(() => {
+    const active = getActiveTimer();
+    if (active) {
+      setSessionId(active.sessionId);
+      setStartTime(new Date(active.startedAt));
+      setSeconds(Math.floor((Date.now() - active.startedAt) / 1000));
+      setIsRunning(true);
+    }
+    // Keep synced if another tab changes state
+    return subscribeTimer(() => {
+      const cur = getActiveTimer();
+      if (!cur) {
+        setIsRunning(false);
+        setSessionId(null);
+        setStartTime(null);
+        setSeconds(0);
+      }
+    });
+  }, []);
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -56,9 +78,11 @@ export function TimerWidget() {
       return;
     }
 
+    const now = new Date();
     setSessionId(data.id);
-    setStartTime(new Date());
+    setStartTime(now);
     setIsRunning(true);
+    setActiveTimer({ sessionId: data.id, startedAt: now.getTime() });
   }
 
   async function handlePause() {
@@ -83,6 +107,7 @@ export function TimerWidget() {
     setIsRunning(false);
     setStartTime(null);
     setSessionId(null);
+    setActiveTimer(null);
   }
 
   return (

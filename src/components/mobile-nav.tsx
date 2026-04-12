@@ -77,7 +77,7 @@ const navSections = [
   {
     label: "",
     items: [
-      { href: "/workspace", label: "Workspace Settings", icon: Settings },
+      { href: "/settings", label: "Settings", icon: Settings },
       { href: "/help", label: "Help & Guide", icon: HelpCircle },
       { href: "/feedback", label: "Send Feedback", icon: Star },
     ],

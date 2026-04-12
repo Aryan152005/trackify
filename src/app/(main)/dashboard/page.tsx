@@ -209,14 +209,14 @@ export default async function DashboardPage() {
       />
 
       {/* Main Content Grid */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3 2xl:grid-cols-5">
         {/* Left Column - Charts */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-6 lg:col-span-2 2xl:col-span-3">
           <DashboardCharts entries={chartEntries || []} weekEntries={weekEntries || []} />
         </div>
 
-        {/* Right Column - Widgets */}
-        <div className="space-y-6">
+        {/* Right Column - Widgets: single col at lg, 2 cols on 2xl+ to use wide screens */}
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-1 2xl:col-span-2 2xl:grid-cols-2">
           <TimerWidget />
           <TaskList tasks={tasks || []} />
           <MotivationWidget motivation={motivation} />
