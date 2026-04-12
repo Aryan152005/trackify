@@ -6,7 +6,7 @@ import { sendPushToUser } from "@/lib/push/server";
 import { logEvent } from "@/lib/logs/logger";
 import { requireAdmin } from "@/lib/admin/actions";
 
-const ADMIN_EMAIL = "paratakkearyan@gmail.com";
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? "paratakkearyan@gmail.com").toLowerCase();
 
 export async function submitFeedback(data: {
   type: "bug" | "feature" | "general" | "complaint";

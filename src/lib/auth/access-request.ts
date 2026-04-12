@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToUser } from "@/lib/push/server";
 import { logEvent } from "@/lib/logs/logger";
 
-const ADMIN_EMAIL = "paratakkearyan@gmail.com";
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? "paratakkearyan@gmail.com").toLowerCase();
 
 /**
  * Called whenever a non-whitelisted email attempts to login or signup.

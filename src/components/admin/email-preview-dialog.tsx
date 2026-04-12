@@ -5,6 +5,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { Copy, Check, Mail, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
+import { htmlToText } from "@/lib/email/html-to-text";
 
 export interface EmailPreviewPayload {
   to: string;
@@ -16,23 +17,6 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   payload: EmailPreviewPayload | null;
-}
-
-function htmlToText(html: string): string {
-  return html
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>/gi, "\n\n")
-    .replace(/<\/h[1-6]>/gi, "\n\n")
-    .replace(/<\/li>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
 }
 
 export function EmailPreviewDialog({ open, onOpenChange, payload }: Props) {

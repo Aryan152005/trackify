@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 
-const ADMIN_EMAIL = "paratakkearyan@gmail.com";
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? "paratakkearyan@gmail.com").toLowerCase();
 
 export async function requireAdmin() {
   const supabase = await createClient();

@@ -2,12 +2,27 @@ import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { logEvent } from "@/lib/logs/logger";
 import { handleNotWhitelistedAttempt } from "@/lib/auth/access-request";
+import { rateLimit, rateLimitResponse, getClientIp } from "@/lib/rate-limit";
 
 /**
  * Email whitelist signup: verifies email is whitelisted and creates user with password.
  * Requires SUPABASE_SERVICE_ROLE_KEY in .env.local.
  */
 export async function POST(request: Request) {
+  // Rate limit: 5 signup attempts per hour per IP
+  const ip = getClientIp(request);
+  const limit = rateLimit(`signup:${ip}`, 5, 60 * 60 * 1000);
+  if (!limit.allowed) {
+    await logEvent({
+      service: "auth",
+      level: "warn",
+      tag: "signup.rateLimited",
+      message: `Signup rate limit hit for IP ${ip}`,
+      metadata: { ip, resetAt: limit.resetAt },
+    });
+    return rateLimitResponse(limit);
+  }
+
   try {
     const { email, password, name } = await request.json();
     if (!email || typeof email !== "string") {
