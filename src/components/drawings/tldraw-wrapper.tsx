@@ -41,7 +41,10 @@ export function TldrawWrapper({ initialData, onChange, remoteUpdate }: TldrawWra
   const lastFireRef = useRef(0);
   const trailingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRef = useRef<{ elements: unknown[]; appState: Record<string, unknown>; files: Record<string, unknown> } | null>(null);
-  const FRAME_MS = 40; // ~25 fps — smooth enough for sketching, cheap on realtime quota
+  // Figma-style approach: local rendering is always instant (Excalidraw handles
+  // that internally). We only broadcast ~10 fps so network + JSON serialisation
+  // don't block the drawing loop. Peers interpolate visually via their own render.
+  const FRAME_MS = 100;
   const [parsedInitial, setParsedInitial] = useState<{
     elements?: unknown[];
     appState?: Record<string, unknown>;

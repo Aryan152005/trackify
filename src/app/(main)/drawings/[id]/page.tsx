@@ -119,21 +119,24 @@ export default function DrawingDetailPage() {
   // Auto-save handler (called by TldrawWrapper on change, already debounced)
   // -----------------------------------------------------------------------
 
+  const lastBroadcastSigRef = useRef<string>("");
   const handleDrawingChange = useCallback(
     (data: Record<string, unknown>) => {
-      setSaveStatus("unsaved");
+      setSaveStatus((prev) => (prev === "unsaved" || prev === "saving" ? prev : "unsaved"));
 
-      // Broadcast ONLY the canvas elements. appState holds per-user UI state
-      // (selected tool, zoom, camera, selection) which must stay independent
-      // — broadcasting it would make user B's tool change when user A clicks erase.
-      if (channelRef.current) {
+      // Broadcast ONLY the canvas elements, and only when they actually changed.
+      // appState holds per-user UI state (tool, zoom, camera, selection) so each
+      // user stays independent — Figma/Canva behaviour.
+      const elements = ((data as { elements?: unknown[] }).elements ?? []) as Array<{ id: string; version: number }>;
+      // Cheap signature: total count + each element's version. Excalidraw bumps
+      // `version` on every mutation, so we send only when something actually moved.
+      const sig = `${elements.length}:${elements.map((e) => `${e.id}@${e.version}`).join(",")}`;
+      if (channelRef.current && sig !== lastBroadcastSigRef.current) {
+        lastBroadcastSigRef.current = sig;
         channelRef.current.send({
           type: "broadcast",
           event: "scene",
-          payload: {
-            from: selfIdRef.current,
-            elements: (data as { elements?: unknown[] }).elements ?? [],
-          },
+          payload: { from: selfIdRef.current, elements },
         });
       }
 
