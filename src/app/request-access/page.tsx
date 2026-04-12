@@ -41,7 +41,7 @@ export default function RequestAccessPage() {
           <CheckCircle className="mx-auto mb-4 h-12 w-12 text-green-500" />
           <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">Request submitted!</h2>
           <p className="mt-2 text-zinc-500">
-            We&apos;ll review your request and send you an email when you&apos;re approved.
+            The admin has been notified and will review your request shortly.
           </p>
           <Link href="/" className="mt-6 inline-block text-sm text-indigo-600 hover:underline dark:text-indigo-400">
             Back to home

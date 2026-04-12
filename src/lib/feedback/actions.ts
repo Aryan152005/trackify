@@ -76,15 +76,54 @@ export async function submitWhitelistRequest(data: {
 }) {
   const supabase = await createClient();
 
+  const email = data.email.toLowerCase().trim();
+  const name = data.name?.trim() || null;
+  const reason = data.reason?.trim() || null;
+
   const { error } = await supabase
     .from("whitelist_requests")
-    .insert({
-      email: data.email.toLowerCase().trim(),
-      name: data.name?.trim() || null,
-      reason: data.reason?.trim() || null,
-    });
+    .insert({ email, name, reason });
 
   if (error) throw new Error(`Failed to submit request: ${error.message}`);
+
+  // Notify the admin via in-app notification + push (no email needed).
+  try {
+    const admin = createAdminClient();
+    const { data: authUsers } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    const adminUser = authUsers?.users?.find((u) => u.email?.toLowerCase() === ADMIN_EMAIL);
+    if (!adminUser) return;
+
+    // Pick any workspace the admin belongs to — notifications.workspace_id is NOT NULL.
+    const { data: adminWs } = await admin
+      .from("workspace_members")
+      .select("workspace_id")
+      .eq("user_id", adminUser.id)
+      .limit(1)
+      .maybeSingle();
+
+    if (adminWs?.workspace_id) {
+      await admin.from("notifications").insert({
+        workspace_id: adminWs.workspace_id,
+        user_id: adminUser.id,
+        type: "request",
+        title: "New access request",
+        body: `${name ? name + " (" + email + ")" : email} wants access${reason ? " — " + reason.slice(0, 80) : ""}`,
+        entity_type: "whitelist_request",
+        entity_id: null,
+        is_read: false,
+      });
+    }
+
+    // Web push to admin's subscribed devices.
+    await sendPushToUser(adminUser.id, {
+      title: "New access request",
+      body: `${name ? name + " (" + email + ")" : email}${reason ? " — " + reason.slice(0, 80) : ""}`,
+      url: "/admin?tab=whitelist",
+      tag: `whitelist-request-${email}`,
+    });
+  } catch {
+    /* non-critical — don't fail the request if notification fails */
+  }
 }
 
 /** Admin-only: fetch all feedback for the admin review panel. */

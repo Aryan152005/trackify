@@ -305,8 +305,9 @@ export default function SharedTokenPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
+      <div className="flex min-h-[60vh] items-center justify-center" role="status" aria-busy="true">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+        <span className="sr-only">Loading shared content…</span>
       </div>
     );
   }

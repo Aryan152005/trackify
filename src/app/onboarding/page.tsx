@@ -121,6 +121,9 @@ export default function OnboardingPage() {
         <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-8 shadow-xl dark:border-zinc-700 dark:bg-zinc-800">
           <div className="mb-6 text-center">
             <Image src="/icons/icon-192.png" alt="Trackify" width={48} height={48} className="mx-auto mb-3 rounded-xl" />
+            <div className="mx-auto mb-3 flex w-fit items-center gap-1.5 rounded-full bg-indigo-100 px-2.5 py-0.5 text-[11px] font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+              Step 1 of 2
+            </div>
             <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">Welcome to Trackify!</h1>
             <p className="mt-1 text-sm text-zinc-500">Let&apos;s set up your workspace in 30 seconds</p>
           </div>

@@ -2,10 +2,9 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Eye, EyeOff, Loader2, Check } from "lucide-react";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -13,42 +12,26 @@ export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const supabase = createClient();
+
+  const strength = useMemo(() => scorePassword(password), [password]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setMessage(null);
 
-    if (!email.trim()) {
-      setError("Email is required");
-      return;
-    }
-
-    if (!password) {
-      setError("Password is required");
-      return;
-    }
-
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
+    if (!email.trim()) return setError("Email is required");
+    if (!password) return setError("Password is required");
+    if (password.length < 6) return setError("Password must be at least 6 characters");
+    if (password !== confirmPassword) return setError("Passwords do not match");
 
     setLoading(true);
-
     try {
       const normalizedEmail = email.toLowerCase().trim();
 
-      // 1. Check whitelist via API
       const res = await fetch("/api/auth/whitelist-signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -58,12 +41,11 @@ export default function SignupPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || "Signup failed");
+        setError(humanizeRateLimit(data.error) || "Signup failed");
         setLoading(false);
         return;
       }
 
-      // 2. Sign in with the new password
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: normalizedEmail,
         password: password,
@@ -75,10 +57,9 @@ export default function SignupPage() {
         return;
       }
 
-      // Success - redirect to onboarding
       router.push("/onboarding");
       router.refresh();
-    } catch (error) {
+    } catch {
       setError("Network error. Please try again.");
     } finally {
       setLoading(false);
@@ -94,23 +75,18 @@ export default function SignupPage() {
         </p>
 
         {error && (
-          <div className="mb-4 rounded-lg bg-red-100 px-3 py-2 text-sm text-red-800 dark:bg-red-900/30 dark:text-red-200">
+          <div
+            role="alert"
+            aria-live="polite"
+            className="mb-4 rounded-lg bg-red-100 px-3 py-2.5 text-sm text-red-800 dark:bg-red-900/30 dark:text-red-200"
+          >
             {error}
           </div>
         )}
 
-        {message && (
-          <div className="mb-4 rounded-lg bg-green-100 px-3 py-2 text-sm text-green-800 dark:bg-green-900/30 dark:text-green-200">
-            {message}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" aria-busy={loading}>
           <div>
-            <label
-              htmlFor="name"
-              className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-            >
+            <label htmlFor="name" className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Your name
             </label>
             <input
@@ -118,7 +94,7 @@ export default function SignupPage() {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-base text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100 sm:text-sm"
+              className="h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
               placeholder="e.g. Aryan"
               autoComplete="name"
               disabled={loading}
@@ -126,10 +102,7 @@ export default function SignupPage() {
           </div>
 
           <div>
-            <label
-              htmlFor="email"
-              className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-            >
+            <label htmlFor="email" className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Email
             </label>
             <input
@@ -138,7 +111,7 @@ export default function SignupPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
+              className="h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
               placeholder="you@example.com"
               autoComplete="email"
               disabled={loading}
@@ -149,51 +122,63 @@ export default function SignupPage() {
           </div>
 
           <div>
-            <label
-              htmlFor="password"
-              className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-            >
+            <label htmlFor="password" className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Password
             </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
-              placeholder="At least 6 characters"
-              autoComplete="new-password"
-              disabled={loading}
-            />
+            <div className="relative">
+              <input
+                id="password"
+                type={showPw ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
+                className="h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 pr-11 text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
+                placeholder="At least 6 characters"
+                autoComplete="new-password"
+                disabled={loading}
+              />
+              <button
+                type="button"
+                aria-label={showPw ? "Hide password" : "Show password"}
+                onClick={() => setShowPw((v) => !v)}
+                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+              >
+                {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            {password.length > 0 && <PasswordStrength score={strength.score} label={strength.label} />}
           </div>
 
           <div>
-            <label
-              htmlFor="confirmPassword"
-              className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-            >
-              Confirm Password
+            <label htmlFor="confirmPassword" className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Confirm password
             </label>
-            <input
-              id="confirmPassword"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
-              placeholder="Confirm your password"
-              autoComplete="new-password"
-              disabled={loading}
-            />
+            <div className="relative">
+              <input
+                id="confirmPassword"
+                type={showPw ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                className="h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 pr-9 text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
+                placeholder="Confirm your password"
+                autoComplete="new-password"
+                disabled={loading}
+              />
+              {confirmPassword.length > 0 && confirmPassword === password && (
+                <Check className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-500" />
+              )}
+            </div>
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
+            aria-busy={loading}
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
           >
+            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             {loading ? "Creating account…" : "Create Account"}
           </button>
         </form>
@@ -214,4 +199,48 @@ export default function SignupPage() {
       </div>
     </div>
   );
+}
+
+// Simple heuristic password strength (0..4): length + mixed case + digits + symbols.
+function scorePassword(pw: string): { score: number; label: string } {
+  if (!pw) return { score: 0, label: "" };
+  let s = 0;
+  if (pw.length >= 8) s++;
+  if (pw.length >= 12) s++;
+  if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) s++;
+  if (/\d/.test(pw)) s++;
+  if (/[^a-zA-Z0-9]/.test(pw)) s++;
+  const clamped = Math.min(s, 4);
+  const labels = ["Too weak", "Weak", "Fair", "Good", "Strong"];
+  return { score: clamped, label: labels[clamped] };
+}
+
+function PasswordStrength({ score, label }: { score: number; label: string }) {
+  const colors = ["bg-red-500", "bg-orange-500", "bg-yellow-500", "bg-lime-500", "bg-emerald-500"];
+  const textColors = ["text-red-600", "text-orange-600", "text-yellow-600", "text-lime-600", "text-emerald-600"];
+  return (
+    <div className="mt-1.5 space-y-1">
+      <div className="flex gap-1">
+        {[0, 1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className={`h-1 flex-1 rounded-full transition ${
+              i < score ? colors[score] : "bg-zinc-200 dark:bg-zinc-700"
+            }`}
+          />
+        ))}
+      </div>
+      <p className={`text-[11px] font-medium ${textColors[score]}`}>{label}</p>
+    </div>
+  );
+}
+
+function humanizeRateLimit(text?: string): string | undefined {
+  if (!text) return text;
+  return text.replace(/(\d+)s\b/g, (_m, s) => {
+    const secs = parseInt(s, 10);
+    if (secs < 60) return `${secs} sec`;
+    const mins = Math.ceil(secs / 60);
+    return mins === 1 ? "1 minute" : `${mins} minutes`;
+  });
 }
