@@ -8,7 +8,7 @@ import type { WorkEntryStatus } from "@/lib/types/database";
 import type { Tag } from "@/lib/types/database";
 import {
   Image as ImageIcon, X, Calendar, CheckCircle2, Type, AlignLeft,
-  Briefcase, Lightbulb, ArrowRight, Smile, Gauge, TagIcon, Loader2,
+  Briefcase, Lightbulb, ArrowRight, Smile, Gauge, TagIcon, Loader2, Clock,
 } from "lucide-react";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -103,6 +103,8 @@ export function AddEntryForm({ userId, tags }: AddEntryFormProps) {
     const productivity_score = formData.get("productivity_score")
       ? Number(formData.get("productivity_score"))
       : null;
+    const hoursRaw = formData.get("hours_worked") as string | null;
+    const hours_worked = hoursRaw && hoursRaw.trim() !== "" ? Number(hoursRaw) : null;
     const tagIds = Array.from(selectedTagIds);
 
     const supabase = createClient();
@@ -120,6 +122,7 @@ export function AddEntryForm({ userId, tags }: AddEntryFormProps) {
         next_day_plan,
         mood,
         productivity_score,
+        hours_worked,
         status,
       })
       .select("id")
@@ -138,20 +141,28 @@ export function AddEntryForm({ userId, tags }: AddEntryFormProps) {
     }
 
     if (entry && selectedImages.length > 0) {
-      const uploadPromises = selectedImages.map(async (file, index) => {
-        const fileExt = file.name.split(".").pop();
-        const fileName = `${userId}/${entry.id}/${Date.now()}_${index}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage.from(BUCKET).upload(fileName, file);
-        if (uploadError) throw uploadError;
-        const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(fileName);
-        return { entry_id: entry.id, file_url: urlData.publicUrl, type: "image" as const };
-      });
-
+      // Track each uploaded storage path so we can clean up on any failure.
+      const uploadedPaths: string[] = [];
       try {
-        const attachments = await Promise.all(uploadPromises);
-        await supabase.from("attachments").insert(attachments);
-      } catch {
-        toast.error("Entry saved but some images failed to upload");
+        const attachments = await Promise.all(
+          selectedImages.map(async (file, index) => {
+            const fileExt = file.name.split(".").pop();
+            const fileName = `${userId}/${entry.id}/${Date.now()}_${index}.${fileExt}`;
+            const { error: uploadError } = await supabase.storage.from(BUCKET).upload(fileName, file);
+            if (uploadError) throw uploadError;
+            uploadedPaths.push(fileName);
+            const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(fileName);
+            return { entry_id: entry.id, file_url: urlData.publicUrl, type: "image" as const };
+          })
+        );
+        const { error: insertAttErr } = await supabase.from("attachments").insert(attachments);
+        if (insertAttErr) throw insertAttErr;
+      } catch (err) {
+        // Roll back the uploads so they don't linger as orphans in storage.
+        if (uploadedPaths.length > 0) {
+          await supabase.storage.from(BUCKET).remove(uploadedPaths).catch(() => {});
+        }
+        toast.error(err instanceof Error ? `Image upload failed: ${err.message}` : "Some images failed to upload");
       }
     }
 
@@ -264,13 +275,25 @@ export function AddEntryForm({ userId, tags }: AddEntryFormProps) {
         title="Measure & tag"
         description="Score the day, tag the work, attach proof."
       >
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-3">
           <Field label="Mood" icon={<Smile className="h-3.5 w-3.5" />} htmlFor="mood">
             <input
               id="mood"
               name="mood"
               type="text"
               placeholder="e.g. Focused, drained, energized"
+              className={INPUT_CLASS}
+            />
+          </Field>
+          <Field label="Hours worked" icon={<Clock className="h-3.5 w-3.5" />} htmlFor="hours_worked">
+            <input
+              id="hours_worked"
+              name="hours_worked"
+              type="number"
+              min={0}
+              max={24}
+              step="0.25"
+              placeholder="e.g. 6.5"
               className={INPUT_CLASS}
             />
           </Field>

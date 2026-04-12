@@ -19,6 +19,7 @@ export interface UpdateEntryInput {
   next_day_plan?: string | null;
   mood?: string | null;
   productivity_score?: number | null;
+  hours_worked?: number | null;
   status?: string;
   date?: string;
 }

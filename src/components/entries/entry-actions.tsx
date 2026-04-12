@@ -18,6 +18,7 @@ interface EntryActionsProps {
   initialNextDayPlan: string;
   initialMood: string;
   initialScore: number | null;
+  initialHours: number | null;
 }
 
 export function EntryActions(props: EntryActionsProps) {
@@ -35,6 +36,7 @@ export function EntryActions(props: EntryActionsProps) {
   const [nextDayPlan, setNextDayPlan] = useState(props.initialNextDayPlan);
   const [mood, setMood] = useState(props.initialMood);
   const [score, setScore] = useState<number | null>(props.initialScore);
+  const [hours, setHours] = useState<number | null>(props.initialHours);
 
   async function handleSave() {
     if (!title.trim()) {
@@ -53,6 +55,7 @@ export function EntryActions(props: EntryActionsProps) {
         next_day_plan: nextDayPlan.trim() || null,
         mood: mood.trim() || null,
         productivity_score: score,
+        hours_worked: hours,
       });
       toast.success("Entry updated");
       setEditing(false);
@@ -169,12 +172,24 @@ export function EntryActions(props: EntryActionsProps) {
               className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
             />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <Field label="Mood">
               <input
                 value={mood}
                 onChange={(e) => setMood(e.target.value)}
                 placeholder="e.g. energized"
+                className="h-10 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+              />
+            </Field>
+            <Field label="Hours">
+              <input
+                type="number"
+                min={0}
+                max={24}
+                step="0.25"
+                value={hours ?? ""}
+                onChange={(e) => setHours(e.target.value === "" ? null : Number(e.target.value))}
+                placeholder="e.g. 6.5"
                 className="h-10 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
               />
             </Field>

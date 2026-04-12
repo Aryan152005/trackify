@@ -36,6 +36,7 @@ export default async function EntryDetailPage({
       next_day_plan,
       mood,
       productivity_score,
+      hours_worked,
       status,
       created_at,
       workspace_id,
@@ -79,6 +80,7 @@ export default async function EntryDetailPage({
           initialNextDayPlan={(entry.next_day_plan as string) ?? ""}
           initialMood={(entry.mood as string) ?? ""}
           initialScore={(entry.productivity_score as number) ?? null}
+          initialHours={(entry.hours_worked as number) ?? null}
         />
       </div>
 
@@ -99,6 +101,11 @@ export default async function EntryDetailPage({
           {entry.productivity_score != null && (
             <span className="text-sm text-zinc-600 dark:text-zinc-400">
               Score: {entry.productivity_score as number}/10
+            </span>
+          )}
+          {entry.hours_worked != null && (
+            <span className="text-sm text-zinc-600 dark:text-zinc-400">
+              {entry.hours_worked as number}h worked
             </span>
           )}
         </div>
