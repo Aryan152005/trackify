@@ -69,9 +69,9 @@ export async function globalFtsSearch(
   const entriesPromise = (async () => {
     let q = supabase
       .from("work_entries")
-      .select("id, title, description, work_done, learning, updated_at")
+      .select("id, title, description, work_done, learning, created_at")
       .textSearch("search_tsv", trimmed, { type: "websearch" })
-      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: false })
       .limit(perType);
     if (workspaceId) q = q.eq("workspace_id", workspaceId);
     const { data, error } = await q;
@@ -81,8 +81,8 @@ export async function globalFtsSearch(
       id: r.id,
       title: r.title ?? "Untitled entry",
       snippet: truncate(r.description ?? r.work_done ?? r.learning ?? r.title),
-      href: `/entries`,
-      updatedAt: r.updated_at,
+      href: `/entries/${r.id}`,
+      updatedAt: r.created_at,
     }));
   })();
 

@@ -1,8 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
+import { getActiveWorkspaceId } from "@/lib/workspace/actions";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
 import Image from "next/image";
+import { CollaborationToolbar } from "@/components/collaboration/collaboration-toolbar";
+import { EntryActions } from "@/components/entries/entry-actions";
 
 export default async function EntryDetailPage({
   params,
@@ -16,7 +19,11 @@ export default async function EntryDetailPage({
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data: entry } = await supabase
+  const workspaceId = await getActiveWorkspaceId();
+
+  // Scope by user_id AND workspace_id so a stale active-workspace can't leak
+  // entries from other workspaces via the URL.
+  let query = supabase
     .from("work_entries")
     .select(
       `
@@ -31,28 +38,29 @@ export default async function EntryDetailPage({
       productivity_score,
       status,
       created_at,
+      workspace_id,
       entry_tags ( tag_id, tags ( id, name, color ) )
     `
     )
     .eq("id", id)
-    .eq("user_id", user.id)
-    .single();
+    .eq("user_id", user.id);
+  if (workspaceId) query = query.eq("workspace_id", workspaceId);
+  const { data: entry } = await query.single();
 
   if (!entry) notFound();
 
-  // Fetch attachments (photos)
   const { data: attachments } = await supabase
     .from("attachments")
     .select("id, file_url, type")
     .eq("entry_id", id)
     .eq("type", "image");
 
-  const tags = (entry.entry_tags as unknown as { tags: { name: string; color: string } | null }[] | null)?.map(
-    (et) => et.tags
-  ).filter(Boolean) as { name: string; color: string }[] | undefined;
+  const tags = (entry.entry_tags as unknown as { tags: { name: string; color: string } | null }[] | null)
+    ?.map((et) => et.tags)
+    .filter(Boolean) as { name: string; color: string }[] | undefined;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <Link
           href="/entries"
@@ -60,25 +68,43 @@ export default async function EntryDetailPage({
         >
           ← Back to entries
         </Link>
+        <EntryActions
+          entryId={entry.id as string}
+          initialTitle={entry.title as string}
+          initialDate={entry.date as string}
+          initialStatus={(entry.status as string) ?? "done"}
+          initialDescription={(entry.description as string) ?? ""}
+          initialWorkDone={(entry.work_done as string) ?? ""}
+          initialLearning={(entry.learning as string) ?? ""}
+          initialNextDayPlan={(entry.next_day_plan as string) ?? ""}
+          initialMood={(entry.mood as string) ?? ""}
+          initialScore={(entry.productivity_score as number) ?? null}
+        />
       </div>
+
+      <CollaborationToolbar
+        entityType="entry"
+        entityId={entry.id as string}
+        entityTitle={(entry.title as string) ?? "Entry"}
+      />
 
       <article className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <span className="text-sm text-zinc-500 dark:text-zinc-400">
-            {format(new Date(entry.date), "MMMM d, yyyy")}
+            {format(new Date(entry.date as string), "MMMM d, yyyy")}
           </span>
           <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
-            {entry.status}
+            {entry.status as string}
           </span>
           {entry.productivity_score != null && (
             <span className="text-sm text-zinc-600 dark:text-zinc-400">
-              Score: {entry.productivity_score}/10
+              Score: {entry.productivity_score as number}/10
             </span>
           )}
         </div>
 
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-          {entry.title}
+          {entry.title as string}
         </h1>
 
         {tags && tags.length > 0 && (
@@ -87,10 +113,7 @@ export default async function EntryDetailPage({
               <span
                 key={t.name}
                 className="rounded-full px-2 py-0.5 text-xs font-medium"
-                style={{
-                  backgroundColor: `${t.color}20`,
-                  color: t.color,
-                }}
+                style={{ backgroundColor: `${t.color}20`, color: t.color }}
               >
                 {t.name}
               </span>
@@ -99,54 +122,17 @@ export default async function EntryDetailPage({
         )}
 
         {entry.description && (
-          <div className="mt-4">
-            <h2 className="text-sm font-medium uppercase text-zinc-500 dark:text-zinc-400">
-              Description
-            </h2>
-            <p className="mt-1 text-zinc-700 dark:text-zinc-300">{entry.description}</p>
-          </div>
+          <Section label="Description" text={entry.description as string} />
         )}
-
-        {entry.work_done && (
-          <div className="mt-4">
-            <h2 className="text-sm font-medium uppercase text-zinc-500 dark:text-zinc-400">
-              Work done
-            </h2>
-            <p className="mt-1 whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
-              {entry.work_done}
-            </p>
-          </div>
-        )}
-
-        {entry.learning && (
-          <div className="mt-4">
-            <h2 className="text-sm font-medium uppercase text-zinc-500 dark:text-zinc-400">
-              Learning
-            </h2>
-            <p className="mt-1 whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
-              {entry.learning}
-            </p>
-          </div>
-        )}
-
-        {entry.next_day_plan && (
-          <div className="mt-4">
-            <h2 className="text-sm font-medium uppercase text-zinc-500 dark:text-zinc-400">
-              Next day plan
-            </h2>
-            <p className="mt-1 whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
-              {entry.next_day_plan}
-            </p>
-          </div>
-        )}
-
+        {entry.work_done && <Section label="Work done" text={entry.work_done as string} />}
+        {entry.learning && <Section label="Learning" text={entry.learning as string} />}
+        {entry.next_day_plan && <Section label="Next day plan" text={entry.next_day_plan as string} />}
         {entry.mood && (
           <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
-            Mood: {entry.mood}
+            Mood: {entry.mood as string}
           </p>
         )}
 
-        {/* Photo Proof */}
         {attachments && attachments.length > 0 && (
           <div className="mt-6">
             <h2 className="mb-3 text-sm font-medium uppercase text-zinc-500 dark:text-zinc-400">
@@ -174,6 +160,15 @@ export default async function EntryDetailPage({
           </div>
         )}
       </article>
+    </div>
+  );
+}
+
+function Section({ label, text }: { label: string; text: string }) {
+  return (
+    <div className="mt-4">
+      <h2 className="text-sm font-medium uppercase text-zinc-500 dark:text-zinc-400">{label}</h2>
+      <p className="mt-1 whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">{text}</p>
     </div>
   );
 }
