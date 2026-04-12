@@ -1,6 +1,7 @@
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { logEvent } from "@/lib/logs/logger";
+import { handleNotWhitelistedAttempt } from "@/lib/auth/access-request";
 
 /**
  * Email whitelist signup: verifies email is whitelisted and creates user with password.
@@ -8,7 +9,7 @@ import { logEvent } from "@/lib/logs/logger";
  */
 export async function POST(request: Request) {
   try {
-    const { email, password } = await request.json();
+    const { email, password, name } = await request.json();
     if (!email || typeof email !== "string") {
       return NextResponse.json({ error: "Email required" }, { status: 400 });
     }
@@ -54,10 +55,18 @@ export async function POST(request: Request) {
         level: "warn",
         tag: "signup.notWhitelisted",
         message: `Signup blocked — email not whitelisted`,
-        metadata: { email: normalizedEmail },
+        metadata: { email: normalizedEmail, name },
+      });
+      // Record access request + push-notify admin. Non-blocking.
+      await handleNotWhitelistedAttempt({
+        email: normalizedEmail,
+        name: typeof name === "string" ? name.trim() : null,
+        source: "signup",
       });
       return NextResponse.json(
-        { error: "Email not whitelisted. Contact admin to add your email." },
+        {
+          error: "Email not whitelisted. Your request has been sent to the admin — you'll be notified when approved.",
+        },
         { status: 403 }
       );
     }
