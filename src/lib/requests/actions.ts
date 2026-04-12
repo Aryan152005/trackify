@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
 import { createNotification } from "@/lib/notifications/actions";
 import type { RequestType, RequestWithProfiles } from "@/lib/types/notification";
 
@@ -65,6 +66,7 @@ export async function createRequest(data: {
     entity_id: request.id,
   });
 
+  revalidatePath("/requests");
   return request;
 }
 
@@ -83,6 +85,11 @@ export async function respondToRequest(
 
   if (fetchError || !existing) {
     throw new Error(`Request not found: ${fetchError?.message}`);
+  }
+
+  // Only the recipient can respond to a request.
+  if (existing.to_user_id !== user.id) {
+    throw new Error("You can only respond to requests addressed to you");
   }
 
   const { data: request, error } = await supabase
@@ -107,6 +114,7 @@ export async function respondToRequest(
     entity_id: requestId,
   });
 
+  revalidatePath("/requests");
   return request;
 }
 

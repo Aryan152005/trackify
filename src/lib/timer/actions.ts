@@ -21,7 +21,7 @@ export async function getRecentTimerSessions(limit = 10): Promise<TimerSessionRo
     .not("ended_at", "is", null)
     .order("started_at", { ascending: false })
     .limit(limit);
-  if (error) return [];
+  if (error) throw new Error(error.message);
   return (data ?? []) as TimerSessionRow[];
 }
 
@@ -44,10 +44,11 @@ export async function getTodayTimerTotal(): Promise<number> {
   if (!user) return 0;
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("timer_sessions")
     .select("duration_seconds")
     .eq("user_id", user.id)
     .gte("started_at", startOfDay.toISOString());
+  if (error) throw new Error(error.message);
   return (data ?? []).reduce((sum, r) => sum + ((r.duration_seconds as number) ?? 0), 0);
 }

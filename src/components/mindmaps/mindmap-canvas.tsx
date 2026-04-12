@@ -36,6 +36,8 @@ interface MindMapCanvasProps {
   onNodesChange: (nodes: MindMapNode[]) => void;
   onEdgesChange: (edges: MindMapEdge[]) => void;
   onViewportChange: (viewport: { x: number; y: number; zoom: number }) => void;
+  /** Remote peer's scene — applied without triggering broadcast back. */
+  remoteScene?: { nodes: MindMapNode[]; edges: MindMapEdge[] } | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -67,7 +69,11 @@ function MindMapCanvasInner({
   onNodesChange: onNodesChangeProp,
   onEdgesChange: onEdgesChangeProp,
   onViewportChange,
+  remoteScene,
 }: MindMapCanvasProps) {
+  // Suppress the sync-to-parent (and therefore broadcast) while applying
+  // a peer's update. Otherwise we echo their update back to them.
+  const applyingRemoteRef = useRef(false);
   const reactFlowInstance = useReactFlow();
 
   // Convert initial nodes to have the correct type
@@ -161,6 +167,7 @@ function MindMapCanvasInner({
       isFirstNodesSync.current = false;
       return;
     }
+    if (applyingRemoteRef.current) return;
     syncNodes(nodes);
   }, [nodes, syncNodes]);
 
@@ -170,8 +177,33 @@ function MindMapCanvasInner({
       isFirstEdgesSync.current = false;
       return;
     }
+    if (applyingRemoteRef.current) return;
     syncEdges(edges);
   }, [edges, syncEdges]);
+
+  // Apply a peer's broadcast — replace nodes + edges with their payload. Guard
+  // with applyingRemoteRef so our sync effects above don't rebroadcast it back.
+  useEffect(() => {
+    if (!remoteScene) return;
+    applyingRemoteRef.current = true;
+    setNodes(
+      remoteScene.nodes.map((n) => ({
+        ...n,
+        type: n.type || "mindmapNode",
+      })) as Node[]
+    );
+    setEdges(
+      remoteScene.edges.map((e) => ({
+        ...e,
+        type: e.type || "smoothstep",
+        animated: e.animated ?? true,
+        style: (e.style as React.CSSProperties) || { stroke: "#6366f1", strokeWidth: 2 },
+      })) as Edge[]
+    );
+    // Release the suppress flag after the sync effects have a chance to run.
+    const t = setTimeout(() => { applyingRemoteRef.current = false; }, 100);
+    return () => clearTimeout(t);
+  }, [remoteScene, setNodes, setEdges]);
 
   const onConnect = useCallback(
     (connection: Connection) => {

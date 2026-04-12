@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -44,11 +45,30 @@ export async function createResource(
     .single();
 
   if (error) throw new Error(`Failed to create resource: ${error.message}`);
+  revalidatePath("/bookings");
   return resource;
 }
 
 export async function deleteResource(resourceId: string) {
-  const { supabase } = await getAuthenticatedUser();
+  const { supabase, user } = await getAuthenticatedUser();
+
+  // Defense-in-depth: verify caller is admin/owner in the resource's workspace.
+  const { data: resource } = await supabase
+    .from("bookable_resources")
+    .select("workspace_id")
+    .eq("id", resourceId)
+    .maybeSingle();
+  if (!resource) throw new Error("Resource not found");
+
+  const { data: me } = await supabase
+    .from("workspace_members")
+    .select("role")
+    .eq("workspace_id", resource.workspace_id as string)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!me || (me.role !== "owner" && me.role !== "admin")) {
+    throw new Error("Only workspace admins can delete resources");
+  }
 
   const { error } = await supabase
     .from("bookable_resources")
@@ -56,6 +76,7 @@ export async function deleteResource(resourceId: string) {
     .eq("id", resourceId);
 
   if (error) throw new Error(`Failed to delete resource: ${error.message}`);
+  revalidatePath("/bookings");
 }
 
 export async function getResources(workspaceId: string) {
@@ -98,11 +119,32 @@ export async function createBooking(data: {
     .single();
 
   if (error) throw new Error(`Failed to create booking: ${error.message}`);
+  revalidatePath("/bookings");
   return booking;
 }
 
 export async function cancelBooking(bookingId: string) {
-  const { supabase } = await getAuthenticatedUser();
+  const { supabase, user } = await getAuthenticatedUser();
+
+  // Only the booker (or a workspace admin) can cancel.
+  const { data: existing } = await supabase
+    .from("bookings")
+    .select("booked_by, workspace_id")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (!existing) throw new Error("Booking not found");
+
+  if (existing.booked_by !== user.id) {
+    const { data: me } = await supabase
+      .from("workspace_members")
+      .select("role")
+      .eq("workspace_id", existing.workspace_id as string)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!me || (me.role !== "owner" && me.role !== "admin")) {
+      throw new Error("Only the booker or a workspace admin can cancel this booking");
+    }
+  }
 
   const { data: booking, error } = await supabase
     .from("bookings")
@@ -112,6 +154,7 @@ export async function cancelBooking(bookingId: string) {
     .single();
 
   if (error) throw new Error(`Failed to cancel booking: ${error.message}`);
+  revalidatePath("/bookings");
   return booking;
 }
 

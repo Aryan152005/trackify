@@ -46,6 +46,12 @@ export default function MindMapDetailPage() {
     "saved" | "saving" | "unsaved" | "idle"
   >("idle");
   const [deleting, setDeleting] = useState(false);
+  const [remoteScene, setRemoteScene] = useState<{ nodes: MindMapNode[]; edges: MindMapEdge[] } | null>(null);
+
+  // Broadcast channel (peer collab)
+  const channelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
+  const selfIdRef = useRef<string>("");
+  const lastSceneSigRef = useRef<string>("");
 
   // Refs for debounced auto-save
   const nodesRef = useRef<MindMapNode[]>([]);
@@ -124,24 +130,69 @@ export default function MindMapDetailPage() {
     };
   }, []);
 
+  // Real-time collab channel — nodes + edges sync across peers. Viewport
+  // stays per-user (independent pan/zoom, like Figma).
+  useEffect(() => {
+    if (!mindmapId) return;
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      selfIdRef.current = data.user?.id ?? Math.random().toString(36).slice(2);
+    });
+    const channel = supabase.channel(`mindmap-scene-${mindmapId}`, {
+      config: { broadcast: { self: false } },
+    });
+    channel.on("broadcast", { event: "scene" }, (payload) => {
+      const p = payload.payload as { from: string; nodes: MindMapNode[]; edges: MindMapEdge[] };
+      if (!p || p.from === selfIdRef.current) return;
+      // Update our refs so debounced save has the fresh scene.
+      nodesRef.current = p.nodes ?? [];
+      edgesRef.current = p.edges ?? [];
+      setRemoteScene({ nodes: p.nodes ?? [], edges: p.edges ?? [] });
+    });
+    channel.subscribe();
+    channelRef.current = channel;
+    return () => {
+      supabase.removeChannel(channel);
+      channelRef.current = null;
+    };
+  }, [mindmapId]);
+
   // -----------------------------------------------------------------------
   // Handlers
   // -----------------------------------------------------------------------
+
+  // Broadcast the current scene to peers. Keeps a signature check so we don't
+  // flood the channel when onNodesChange fires without actual geometry changes.
+  const broadcastScene = useCallback(() => {
+    if (!channelRef.current) return;
+    const sig =
+      `${nodesRef.current.length}:${nodesRef.current.map((n) => `${n.id}@${n.position.x.toFixed(0)},${n.position.y.toFixed(0)}`).join("|")}` +
+      `::${edgesRef.current.length}:${edgesRef.current.map((e) => `${e.source}-${e.target}`).join("|")}`;
+    if (sig === lastSceneSigRef.current) return;
+    lastSceneSigRef.current = sig;
+    channelRef.current.send({
+      type: "broadcast",
+      event: "scene",
+      payload: { from: selfIdRef.current, nodes: nodesRef.current, edges: edgesRef.current },
+    });
+  }, []);
 
   const handleNodesChange = useCallback(
     (nodes: MindMapNode[]) => {
       nodesRef.current = nodes;
       triggerSave();
+      broadcastScene();
     },
-    [triggerSave]
+    [triggerSave, broadcastScene]
   );
 
   const handleEdgesChange = useCallback(
     (edges: MindMapEdge[]) => {
       edgesRef.current = edges;
       triggerSave();
+      broadcastScene();
     },
-    [triggerSave]
+    [triggerSave, broadcastScene]
   );
 
   const handleViewportChange = useCallback(
@@ -290,6 +341,7 @@ export default function MindMapDetailPage() {
             onNodesChange={handleNodesChange}
             onEdgesChange={handleEdgesChange}
             onViewportChange={handleViewportChange}
+            remoteScene={remoteScene}
           />
         </div>
       </div>

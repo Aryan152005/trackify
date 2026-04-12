@@ -123,10 +123,11 @@ export function TimerPill() {
     try {
       const supabase = createClient();
       const duration = computeElapsed(active);
-      await supabase
+      const { error } = await supabase
         .from("timer_sessions")
         .update({ duration_seconds: duration, ended_at: new Date().toISOString() })
         .eq("id", active.sessionId);
+      if (error) throw new Error(error.message);
       setActiveTimer(null);
       toast.success(`Session saved: ${formatElapsed(duration)}`);
     } catch (e) {
