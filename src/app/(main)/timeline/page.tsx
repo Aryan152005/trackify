@@ -13,6 +13,7 @@ import {
 import { AnimatedPage } from "@/components/ui/animated-layout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { GanttChart } from "@/components/timeline/gantt-chart";
 import { RoadmapView } from "@/components/timeline/roadmap-view";
 import { TimelineView } from "@/components/timeline/timeline-view";
@@ -108,14 +109,9 @@ export default function TimelinePage() {
     <AnimatedPage>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <GanttChartIcon className="h-7 w-7 text-indigo-600 dark:text-indigo-400" />
-            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-              Timeline
-            </h1>
-          </div>
-          <div className="flex items-center gap-2">
+        <PageHeader
+          title="Timeline"
+          actions={
             <Button
               variant={showFilters ? "secondary" : "outline"}
               size="sm"
@@ -129,8 +125,8 @@ export default function TimelinePage() {
                 </span>
               )}
             </Button>
-          </div>
-        </div>
+          }
+        />
 
         {/* Toolbar */}
         <Card className="p-3">

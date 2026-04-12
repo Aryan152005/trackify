@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { getTeamPerformance } from "@/lib/visualizations/actions";
 import type { TeamMemberPerformance } from "@/lib/visualizations/types";
@@ -100,15 +101,16 @@ export function TeamPerformance({ workspaceId }: TeamPerformanceProps) {
             {/* Sort */}
             <div className="flex items-center gap-1">
               <ArrowUpDown className="h-3.5 w-3.5 text-zinc-400" />
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as SortKey)}
-                className="rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
-              >
-                {sortOptions.map((o) => (
-                  <option key={o.key} value={o.key}>{o.label}</option>
-                ))}
-              </select>
+              <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
+                <SelectTrigger className="w-auto">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {sortOptions.map((o) => (
+                    <SelectItem key={o.key} value={o.key}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { format, parseISO } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { Plus } from "lucide-react";
@@ -43,25 +44,25 @@ export default async function TasksPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">Your Tasks</h1>
-          <p className="mt-1 text-zinc-600 dark:text-zinc-400">Everything on your plate, organized and prioritized</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href="/boards">
-            <Button variant="outline">
-              Boards
-            </Button>
-          </Link>
-          <Link href="/tasks/new">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              New Task
-            </Button>
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        title="Your Tasks"
+        description="Everything on your plate, organized and prioritized"
+        actions={
+          <>
+            <Link href="/boards">
+              <Button variant="outline">
+                Boards
+              </Button>
+            </Link>
+            <Link href="/tasks/new">
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                New Task
+              </Button>
+            </Link>
+          </>
+        }
+      />
 
       {/* Pending Tasks */}
       <Card>

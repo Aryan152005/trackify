@@ -90,20 +90,43 @@ export function MobileNav() {
     close();
   }, [pathname, close]);
 
-  // Lock body scroll when open
+  // Lock body scroll when open — iOS-safe (position: fixed preserves scroll position)
   useEffect(() => {
-    if (open) {
-      document.body.style.overflow = "hidden";
-      return () => { document.body.style.overflow = ""; };
-    }
+    if (!open) return;
+    const scrollY = window.scrollY;
+    const body = document.body;
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+    return () => {
+      body.style.position = "";
+      body.style.top = "";
+      body.style.left = "";
+      body.style.right = "";
+      body.style.width = "";
+      window.scrollTo(0, scrollY);
+    };
   }, [open]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, close]);
 
   return (
     <>
       <button
         onClick={() => setOpen(!open)}
-        className="lg:hidden rounded-lg p-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+        className="md:hidden rounded-lg p-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
         aria-label="Toggle menu"
+        aria-expanded={open}
       >
         {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
       </button>
@@ -111,7 +134,7 @@ export function MobileNav() {
       {/* Overlay */}
       <div
         className={cn(
-          "fixed inset-0 z-40 bg-black/40 backdrop-blur-sm transition-opacity duration-200 lg:hidden",
+          "fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity duration-200 md:hidden",
           open ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={close}
@@ -121,9 +144,11 @@ export function MobileNav() {
       {/* Drawer */}
       <div
         className={cn(
-          "fixed left-0 top-0 z-50 flex h-full w-72 flex-col bg-white shadow-2xl transition-transform duration-200 ease-out dark:bg-zinc-900 lg:hidden",
+          "fixed left-0 top-0 z-50 flex h-full w-72 max-w-[85vw] flex-col bg-white shadow-2xl transition-transform duration-200 ease-out dark:bg-zinc-900 md:hidden",
           open ? "translate-x-0" : "-translate-x-full"
         )}
+        role="dialog"
+        aria-modal="true"
       >
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-zinc-200 px-4 dark:border-zinc-800">
           <span className="text-lg font-bold text-indigo-600 dark:text-indigo-400">Trackify</span>
@@ -136,11 +161,11 @@ export function MobileNav() {
           </button>
         </div>
 
-        <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800 sm:hidden">
+        <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
           <WorkspaceSwitcher />
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-3">
+        <nav className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 pb-[env(safe-area-inset-bottom)]">
           {navSections.map((section, si) => (
             <div key={si} className={cn(si > 0 && "mt-4")}>
               {section.label && (

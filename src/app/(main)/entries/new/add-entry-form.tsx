@@ -7,6 +7,7 @@ import { useWorkspaceId } from "@/lib/workspace/hooks";
 import type { WorkEntryStatus } from "@/lib/types/database";
 import type { Tag } from "@/lib/types/database";
 import { Image as ImageIcon, X } from "lucide-react";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
 const BUCKET = "entry-attachments";
 const MAX_IMAGES = 5;
@@ -28,6 +29,7 @@ export function AddEntryForm({ userId, tags }: AddEntryFormProps) {
   const workspaceId = useWorkspaceId();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<WorkEntryStatus>("done");
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -188,17 +190,19 @@ export function AddEntryForm({ userId, tags }: AddEntryFormProps) {
           <label htmlFor="status" className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
             Status
           </label>
-          <select
-            id="status"
-            name="status"
-            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
-          >
-            {STATUS_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+          <input type="hidden" name="status" value={status} />
+          <Select value={status} onValueChange={(v) => setStatus(v as WorkEntryStatus)}>
+            <SelectTrigger id="status">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

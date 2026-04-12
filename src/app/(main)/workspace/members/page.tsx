@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { AnimatedPage, AnimatedList, AnimatedItem } from "@/components/ui/animated-layout";
 import Link from "next/link";
 import { ArrowLeft, UserPlus, Shield, Trash2 } from "lucide-react";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import type { WorkspaceRole } from "@/lib/types/workspace";
 
 interface MemberRow {
@@ -133,15 +134,19 @@ export default function WorkspaceMembersPage() {
               placeholder="email@example.com"
               className="flex-1 min-w-[200px] rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
             />
-            <select
+            <Select
               value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value as "admin" | "editor" | "viewer")}
-              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
+              onValueChange={(v) => setInviteRole(v as "admin" | "editor" | "viewer")}
             >
-              <option value="viewer">Viewer</option>
-              <option value="editor">Editor</option>
-              <option value="admin">Admin</option>
-            </select>
+              <SelectTrigger className="w-auto">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="viewer">Viewer</SelectItem>
+                <SelectItem value="editor">Editor</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
             <button
               type="submit"
               disabled={inviting}
@@ -177,20 +182,24 @@ export default function WorkspaceMembersPage() {
                 <div className="flex items-center gap-2">
                   {isAdmin && member.role !== "owner" ? (
                     <>
-                      <select
+                      <Select
                         value={member.role}
-                        onChange={(e) =>
+                        onValueChange={(v) =>
                           handleRoleChange(
                             member.id,
-                            e.target.value as "admin" | "editor" | "viewer"
+                            v as "admin" | "editor" | "viewer"
                           )
                         }
-                        className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-100"
                       >
-                        <option value="viewer">Viewer</option>
-                        <option value="editor">Editor</option>
-                        <option value="admin">Admin</option>
-                      </select>
+                        <SelectTrigger className="w-auto">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="viewer">Viewer</SelectItem>
+                          <SelectItem value="editor">Editor</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <button
                         onClick={() => handleRemove(member.id)}
                         className="rounded-md p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"

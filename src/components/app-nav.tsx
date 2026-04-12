@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -10,6 +9,7 @@ import { MobileNav } from "@/components/mobile-nav";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
 import { NotificationBell } from "@/components/notifications/notification-bell";
 import { MentionsPopover } from "@/components/collaboration/mentions-popover";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import dynamic from "next/dynamic";
 import {
   LayoutDashboard,
@@ -64,26 +64,6 @@ export const navItems = primaryNav;
 export function AppNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const [moreOpen, setMoreOpen] = useState(false);
-  const moreRef = useRef<HTMLDivElement>(null);
-
-  // Close on click outside
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
-        setMoreOpen(false);
-      }
-    }
-    if (moreOpen) {
-      document.addEventListener("mousedown", handleClick);
-      return () => document.removeEventListener("mousedown", handleClick);
-    }
-  }, [moreOpen]);
-
-  // Close on route change
-  useEffect(() => {
-    setMoreOpen(false);
-  }, [pathname]);
 
   async function handleSignOut() {
     const supabase = createClient();
@@ -98,10 +78,10 @@ export function AppNav() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:border-zinc-800 dark:bg-zinc-900/80 dark:supports-[backdrop-filter]:bg-zinc-900/60">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
-        <div className="flex items-center gap-3">
+      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-2 px-3 sm:px-4">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <MobileNav />
-          <Link href="/dashboard" className="flex items-center gap-2 text-lg font-bold text-indigo-600 dark:text-indigo-400">
+          <Link href="/dashboard" className="flex shrink-0 items-center gap-2 text-lg font-bold text-indigo-600 dark:text-indigo-400">
             Trackify
           </Link>
           <div className="hidden sm:block">
@@ -109,63 +89,69 @@ export function AppNav() {
           </div>
           <CommandPalette />
         </div>
-        <nav className="hidden items-center gap-0.5 lg:flex">
+        <nav className="hidden items-center gap-0.5 md:flex">
           {primaryNav.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(href + "/");
             return (
               <Link
                 key={href}
                 href={href}
-                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors ${
+                title={label}
+                className={`flex items-center gap-1.5 rounded-lg px-2 py-2 text-[13px] font-medium transition-colors xl:px-2.5 ${
                   active
                     ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300"
                     : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
                 }`}
               >
-                <Icon className="h-3.5 w-3.5" />
-                {label}
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="hidden xl:inline">{label}</span>
               </Link>
             );
           })}
 
-          {/* More dropdown */}
-          <div className="relative" ref={moreRef}>
-            <button
-              onClick={() => setMoreOpen(!moreOpen)}
-              className={`flex items-center gap-1 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors ${
-                isMoreActive
-                  ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300"
-                  : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
-              }`}
-            >
-              <MoreHorizontal className="h-3.5 w-3.5" />
-              More
-            </button>
-
-            {moreOpen && (
-              <div className="absolute right-0 top-full mt-1 w-52 rounded-xl border border-zinc-200 bg-white py-1.5 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <button
+                title="More"
+                className={`flex items-center gap-1 rounded-lg px-2 py-2 text-[13px] font-medium transition-colors xl:px-2.5 ${
+                  isMoreActive
+                    ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300"
+                    : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
+                }`}
+              >
+                <MoreHorizontal className="h-4 w-4 shrink-0" />
+                <span className="hidden xl:inline">More</span>
+              </button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                align="end"
+                sideOffset={6}
+                className="z-50 w-52 rounded-xl border border-zinc-200 bg-white py-1.5 shadow-lg outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 dark:border-zinc-700 dark:bg-zinc-900"
+              >
                 {moreNav.map(({ href, label, icon: Icon }) => {
                   const active = pathname === href || pathname.startsWith(href + "/");
                   return (
-                    <Link
-                      key={href}
-                      href={href}
-                      className={`flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
-                        active
-                          ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300"
-                          : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                      }`}
-                    >
-                      <Icon className="h-4 w-4 text-zinc-400 dark:text-zinc-500" />
-                      {label}
-                    </Link>
+                    <DropdownMenu.Item key={href} asChild>
+                      <Link
+                        href={href}
+                        className={`flex items-center gap-2.5 px-3 py-2 text-sm outline-none transition-colors ${
+                          active
+                            ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300"
+                            : "text-zinc-700 hover:bg-zinc-50 focus:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:focus:bg-zinc-800"
+                        }`}
+                      >
+                        <Icon className="h-4 w-4 text-zinc-400 dark:text-zinc-500" />
+                        {label}
+                      </Link>
+                    </DropdownMenu.Item>
                   );
                 })}
-              </div>
-            )}
-          </div>
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
         </nav>
-        <div className="flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
           <NotificationBell />
           <MentionsPopover />
           <div className="hidden sm:block">

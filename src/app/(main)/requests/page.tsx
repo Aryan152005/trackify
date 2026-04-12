@@ -12,6 +12,7 @@ import {
 import { RequestForm } from "@/components/requests/request-form";
 import { RequestCard } from "@/components/requests/request-card";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { Plus, Inbox, Send } from "lucide-react";
 import type { RequestWithProfiles, RequestType } from "@/lib/types/notification";
 
@@ -135,20 +136,16 @@ export default function RequestsPage() {
     <AnimatedPage>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-              Requests
-            </h1>
-            <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-              Manage requests between team members
-            </p>
-          </div>
-          <Button onClick={() => setShowForm((v) => !v)}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Request
-          </Button>
-        </div>
+        <PageHeader
+          title="Requests"
+          description="Manage requests between team members"
+          actions={
+            <Button onClick={() => setShowForm((v) => !v)}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Request
+            </Button>
+          }
+        />
 
         {/* New Request Form */}
         {showForm && workspaceId && (

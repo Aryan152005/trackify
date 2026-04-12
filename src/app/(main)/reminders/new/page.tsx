@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useWorkspaceId } from "@/lib/workspace/hooks";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default function NewReminderPage() {
   const [title, setTitle] = useState("");
@@ -67,10 +69,12 @@ export default function NewReminderPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">New Reminder</h1>
-        <p className="mt-1 text-zinc-600 dark:text-zinc-400">Set a reminder for an important task or event</p>
-      </div>
+      <PageHeader
+        title="New Reminder"
+        description="Set a reminder for an important task or event"
+        backHref="/reminders"
+        backLabel="Back to Reminders"
+      />
 
       <Card>
         <CardHeader>
@@ -142,17 +146,18 @@ export default function NewReminderPage() {
                 <label htmlFor="recurrencePattern" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   Recurrence Pattern
                 </label>
-                <select
-                  id="recurrencePattern"
-                  value={recurrencePattern}
-                  onChange={(e) => setRecurrencePattern(e.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-4 py-2 text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
-                  disabled={loading}
-                >
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                </select>
+                <div className="mt-2">
+                  <Select value={recurrencePattern} onValueChange={(v) => setRecurrencePattern(v)} disabled={loading}>
+                    <SelectTrigger id="recurrencePattern">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="daily">Daily</SelectItem>
+                      <SelectItem value="weekly">Weekly</SelectItem>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             )}
 

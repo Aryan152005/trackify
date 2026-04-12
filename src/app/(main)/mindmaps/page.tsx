@@ -5,6 +5,7 @@ import Link from "next/link";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   AnimatedPage,
   AnimatedList,
@@ -26,14 +27,10 @@ export default async function MindMapsPage() {
     return (
       <AnimatedPage>
         <div className="space-y-8">
-          <div>
-            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-              Mind Maps
-            </h1>
-            <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-              Please select or create a workspace first.
-            </p>
-          </div>
+          <PageHeader
+            title="Mind Maps"
+            description="Please select or create a workspace first."
+          />
         </div>
       </AnimatedPage>
     );
@@ -57,22 +54,18 @@ export default async function MindMapsPage() {
     <AnimatedPage>
       <div className="space-y-8">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-              Mind Maps
-            </h1>
-            <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-              Visual brainstorming and idea organization
-            </p>
-          </div>
-          <form action={handleCreate}>
-            <Button type="submit">
-              <Plus className="mr-2 h-4 w-4" />
-              New Mind Map
-            </Button>
-          </form>
-        </div>
+        <PageHeader
+          title="Mind Maps"
+          description="Visual brainstorming and idea organization"
+          actions={
+            <form action={handleCreate}>
+              <Button type="submit">
+                <Plus className="mr-2 h-4 w-4" />
+                New Mind Map
+              </Button>
+            </form>
+          }
+        />
 
         {/* Mind maps grid */}
         {mindmaps && mindmaps.length > 0 ? (

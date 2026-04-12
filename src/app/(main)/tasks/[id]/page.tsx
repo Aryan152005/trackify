@@ -4,6 +4,7 @@ import Link from "next/link";
 import { format, parseISO } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { TaskActions } from "@/components/tasks/task-actions";
@@ -27,18 +28,17 @@ export default async function TaskDetailPage({ params }: { params: { id: string 
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">{task.title}</h1>
-          <div className="mt-2 flex items-center gap-3">
+      <PageHeader
+        title={task.title}
+        backHref="/tasks"
+        backLabel="Back to Tasks"
+        actions={
+          <>
             <TaskStatusBadge status={task.status} />
             <TaskPriorityBadge priority={task.priority} />
-          </div>
-        </div>
-        <Link href="/tasks">
-          <Button variant="outline">Back to Tasks</Button>
-        </Link>
-      </div>
+          </>
+        }
+      />
 
       <CollaborationToolbar
         entityType="task"

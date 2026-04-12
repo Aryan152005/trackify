@@ -12,6 +12,8 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { format, parseISO, startOfWeek, eachWeekOfInterval, subWeeks } from "date-fns";
+import { chartAnim, tooltipStyle, tooltipWrapper, tooltipCursor, activeDot } from "@/lib/charts/theme";
+import { useIsMobile } from "@/lib/hooks/use-media-query";
 
 interface TrendAnalysisProps {
   entries: Array<{
@@ -22,6 +24,7 @@ interface TrendAnalysisProps {
 }
 
 export function TrendAnalysis({ entries }: TrendAnalysisProps) {
+  const isMobile = useIsMobile();
   const today = new Date();
   const weeks = eachWeekOfInterval(
     {
@@ -67,50 +70,70 @@ export function TrendAnalysis({ entries }: TrendAnalysisProps) {
         <CardDescription>12-week productivity and completion trends</CardDescription>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={350}>
-          <LineChart data={weeklyData}>
+        <div className="h-[260px] sm:h-[320px] lg:h-[350px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={weeklyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id="gTrendScore" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#6366f1" />
+                <stop offset="100%" stopColor="#8b5cf6" />
+              </linearGradient>
+              <linearGradient id="gTrendComp" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#10b981" />
+                <stop offset="100%" stopColor="#34d399" />
+              </linearGradient>
+              <linearGradient id="gTrendEntries" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#f59e0b" />
+                <stop offset="100%" stopColor="#fbbf24" />
+              </linearGradient>
+            </defs>
             <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-700" />
             <XAxis
               dataKey="week"
               className="text-xs"
-              tick={{ fill: "currentColor" }}
-              interval="preserveStartEnd"
+              tick={{ fill: "currentColor", fontSize: isMobile ? 10 : 12 }}
+              tickMargin={8}
+              interval={isMobile ? 1 : "preserveStartEnd"}
+              angle={isMobile ? -35 : 0}
+              textAnchor={isMobile ? "end" : "middle"}
+              height={isMobile ? 50 : 30}
             />
-            <YAxis className="text-xs" tick={{ fill: "currentColor" }} />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: "var(--background)",
-                border: "1px solid var(--border)",
-                borderRadius: "8px",
-              }}
-            />
-            <Legend />
+            <YAxis className="text-xs" tick={{ fill: "currentColor", fontSize: isMobile ? 10 : 12 }} width={isMobile ? 28 : 40} />
+            <Tooltip contentStyle={tooltipStyle} wrapperStyle={tooltipWrapper} cursor={tooltipCursor} />
+            {!isMobile && <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />}
             <Line
               type="monotone"
               dataKey="score"
-              stroke="#6366f1"
-              strokeWidth={2}
-              dot={{ fill: "#6366f1", r: 4 }}
+              stroke="url(#gTrendScore)"
+              strokeWidth={2.5}
+              dot={false}
+              activeDot={activeDot}
               name="Avg Score"
+              {...chartAnim}
             />
             <Line
               type="monotone"
               dataKey="completionRate"
-              stroke="#10b981"
-              strokeWidth={2}
-              dot={{ fill: "#10b981", r: 4 }}
+              stroke="url(#gTrendComp)"
+              strokeWidth={2.5}
+              dot={false}
+              activeDot={activeDot}
               name="Completion %"
+              {...chartAnim}
             />
             <Line
               type="monotone"
               dataKey="entries"
-              stroke="#f59e0b"
-              strokeWidth={2}
-              dot={{ fill: "#f59e0b", r: 4 }}
+              stroke="url(#gTrendEntries)"
+              strokeWidth={2.5}
+              dot={false}
+              activeDot={activeDot}
               name="Entries"
+              {...chartAnim}
             />
           </LineChart>
         </ResponsiveContainer>
+        </div>
       </CardContent>
     </Card>
   );

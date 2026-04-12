@@ -14,6 +14,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
 import {
@@ -302,28 +303,32 @@ export function TaskDependencies({
             <div className="space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800">
               {/* Options row */}
               <div className="flex items-center gap-2 text-xs">
-                <select
+                <Select
                   value={depDirection}
-                  onChange={(e) =>
-                    setDepDirection(
-                      e.target.value as "blocking" | "blocked_by"
-                    )
+                  onValueChange={(v) =>
+                    setDepDirection(v as "blocking" | "blocked_by")
                   }
-                  className="rounded border border-zinc-300 bg-white px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-200"
                 >
-                  <option value="blocked_by">This task is blocked by</option>
-                  <option value="blocking">This task blocks</option>
-                </select>
-                <select
+                  <SelectTrigger className="w-auto">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="blocked_by">This task is blocked by</SelectItem>
+                    <SelectItem value="blocking">This task blocks</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
                   value={depType}
-                  onChange={(e) =>
-                    setDepType(e.target.value as DependencyType)
-                  }
-                  className="rounded border border-zinc-300 bg-white px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-200"
+                  onValueChange={(v) => setDepType(v as DependencyType)}
                 >
-                  <option value="blocks">Blocks</option>
-                  <option value="related">Related</option>
-                </select>
+                  <SelectTrigger className="w-auto">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="blocks">Blocks</SelectItem>
+                    <SelectItem value="related">Related</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Search input */}

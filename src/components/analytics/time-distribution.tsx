@@ -3,6 +3,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 import { format, parseISO } from "date-fns";
+import { chartAnim, tooltipStyle, tooltipWrapper } from "@/lib/charts/theme";
+import { useIsMobile } from "@/lib/hooks/use-media-query";
 
 interface TimeDistributionProps {
   timerSessions: Array<{ started_at: string; duration_seconds: number }>;
@@ -10,6 +12,7 @@ interface TimeDistributionProps {
 }
 
 export function TimeDistribution({ timerSessions, entries }: TimeDistributionProps) {
+  const isMobile = useIsMobile();
   // Group by day of week
   const dayStats = [
     "Monday",
@@ -54,33 +57,42 @@ export function TimeDistribution({ timerSessions, entries }: TimeDistributionPro
       </CardHeader>
       <CardContent>
         {timerSessions.length > 0 ? (
-          <ResponsiveContainer width="100%" height={300}>
+          <div className="h-[260px] sm:h-[300px]">
+          <ResponsiveContainer width="100%" height="100%">
             <PieChart>
+              <defs>
+                {colors.map((c, i) => (
+                  <linearGradient key={i} id={`timeSlice-${i}`} x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor={c} stopOpacity={0.7} />
+                    <stop offset="100%" stopColor={c} stopOpacity={1} />
+                  </linearGradient>
+                ))}
+              </defs>
               <Pie
                 data={dayStats}
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                label={({ name, hours }) => `${name}: ${hours}h`}
-                outerRadius={100}
-                fill="#8884d8"
+                label={isMobile ? false : ({ name, hours }) => `${name}: ${hours}h`}
+                innerRadius={isMobile ? 40 : 45}
+                outerRadius={isMobile ? 75 : 90}
+                paddingAngle={2}
                 dataKey="value"
+                {...chartAnim}
               >
                 {dayStats.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                  <Cell key={`cell-${index}`} fill={`url(#timeSlice-${index})`} stroke="rgb(24 24 27)" strokeWidth={1} />
                 ))}
               </Pie>
               <Tooltip
-                contentStyle={{
-                  backgroundColor: "var(--background)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "8px",
-                }}
+                contentStyle={tooltipStyle}
+                wrapperStyle={tooltipWrapper}
                 formatter={(value: number) => [`${(value / 3600).toFixed(1)}h`, "Time"]}
               />
-              <Legend />
+              <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
             </PieChart>
           </ResponsiveContainer>
+          </div>
         ) : (
           <div className="flex h-[300px] items-center justify-center text-zinc-500 dark:text-zinc-400">
             No timer data available. Start tracking your time!

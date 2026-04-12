@@ -1,110 +1,16 @@
 "use server";
 
-import { Resend } from "resend";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/admin/actions";
-import {
-  welcomeEmail,
-  notificationEmail,
-  whitelistApprovedEmail,
-} from "@/lib/email/template";
-
-function getResend() {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) throw new Error("RESEND_API_KEY not configured");
-  return new Resend(key);
-}
-
-function getFrom(): string {
-  return process.env.RESEND_FROM_EMAIL || "Trackify <onboarding@resend.dev>";
-}
+import { logEvent } from "@/lib/logs/logger";
 
 // ---------------------------------------------------------------------------
-// Send notification email to specific users
+// Whitelist management (DB-only — emails are sent manually via preview+copy)
 // ---------------------------------------------------------------------------
 
-export async function sendNotificationToUsers(
-  userIds: string[],
-  subject: string,
-  message: string
-) {
-  await requireAdmin();
+export async function addToWhitelist(email: string) {
+  const adminUser = await requireAdmin();
   const admin = createAdminClient();
-  const resend = getResend();
-  const from = getFrom();
-
-  const results: { email: string; success: boolean; error?: string }[] = [];
-
-  for (const userId of userIds) {
-    try {
-      const { data: authUser } = await admin.auth.admin.getUserById(userId);
-      const email = authUser?.user?.email;
-      if (!email) {
-        results.push({ email: userId, success: false, error: "No email found" });
-        continue;
-      }
-
-      const tpl = notificationEmail(subject, message);
-      await resend.emails.send({
-        from,
-        to: email,
-        subject: tpl.subject,
-        html: tpl.html,
-      });
-
-      results.push({ email, success: true });
-    } catch (e) {
-      results.push({ email: userId, success: false, error: String(e) });
-    }
-  }
-
-  return results;
-}
-
-// ---------------------------------------------------------------------------
-// Send broadcast to ALL users
-// ---------------------------------------------------------------------------
-
-export async function sendBroadcast(subject: string, message: string) {
-  await requireAdmin();
-  const admin = createAdminClient();
-  const resend = getResend();
-  const from = getFrom();
-
-  const { data: authData } = await admin.auth.admin.listUsers();
-  const users = authData?.users ?? [];
-
-  let sent = 0;
-  let failed = 0;
-
-  for (const user of users) {
-    if (!user.email) continue;
-    try {
-      const tpl = notificationEmail(subject, message);
-      await resend.emails.send({
-        from,
-        to: user.email,
-        subject: tpl.subject,
-        html: tpl.html,
-      });
-      sent++;
-    } catch {
-      failed++;
-    }
-  }
-
-  return { sent, failed, total: users.length };
-}
-
-// ---------------------------------------------------------------------------
-// Whitelist management
-// ---------------------------------------------------------------------------
-
-export async function addToWhitelist(email: string, sendInvite: boolean) {
-  await requireAdmin();
-  const admin = createAdminClient();
-  const resend = getResend();
-  const from = getFrom();
 
   const normalizedEmail = email.toLowerCase().trim();
 
@@ -112,35 +18,60 @@ export async function addToWhitelist(email: string, sendInvite: boolean) {
     .from("email_whitelist")
     .upsert({ email: normalizedEmail }, { onConflict: "email" });
 
-  if (error) throw new Error(`Failed to whitelist: ${error.message}`);
-
-  if (sendInvite) {
-    try {
-      const tpl = whitelistApprovedEmail("", normalizedEmail);
-      await resend.emails.send({
-        from,
-        to: normalizedEmail,
-        subject: tpl.subject,
-        html: tpl.html,
-      });
-    } catch {
-      // Email failed but whitelist succeeded
-    }
+  if (error) {
+    await logEvent({
+      service: "email",
+      level: "error",
+      tag: "whitelist.add",
+      message: `Failed to whitelist ${normalizedEmail}: ${error.message}`,
+      metadata: { email: normalizedEmail, code: error.code },
+      userId: adminUser.id,
+    });
+    throw new Error(`Failed to whitelist: ${error.message}`);
   }
+
+  await logEvent({
+    service: "email",
+    level: "info",
+    tag: "whitelist.add",
+    message: `Whitelisted ${normalizedEmail}`,
+    metadata: { email: normalizedEmail },
+    userId: adminUser.id,
+  });
 
   return { email: normalizedEmail };
 }
 
 export async function removeFromWhitelist(email: string) {
-  await requireAdmin();
+  const adminUser = await requireAdmin();
   const admin = createAdminClient();
 
+  const normalizedEmail = email.toLowerCase().trim();
   const { error } = await admin
     .from("email_whitelist")
     .delete()
-    .eq("email", email.toLowerCase().trim());
+    .eq("email", normalizedEmail);
 
-  if (error) throw new Error(`Failed to remove: ${error.message}`);
+  if (error) {
+    await logEvent({
+      service: "email",
+      level: "error",
+      tag: "whitelist.remove",
+      message: `Failed to remove ${normalizedEmail}: ${error.message}`,
+      metadata: { email: normalizedEmail, code: error.code },
+      userId: adminUser.id,
+    });
+    throw new Error(`Failed to remove: ${error.message}`);
+  }
+
+  await logEvent({
+    service: "email",
+    level: "info",
+    tag: "whitelist.remove",
+    message: `Removed ${normalizedEmail} from whitelist`,
+    metadata: { email: normalizedEmail },
+    userId: adminUser.id,
+  });
 }
 
 export async function getWhitelist() {
@@ -156,7 +87,7 @@ export async function getWhitelist() {
 }
 
 // ---------------------------------------------------------------------------
-// Whitelist requests (public — no admin check)
+// Whitelist requests
 // ---------------------------------------------------------------------------
 
 export async function getWhitelistRequests() {
@@ -172,10 +103,8 @@ export async function getWhitelistRequests() {
 }
 
 export async function approveWhitelistRequest(requestId: string) {
-  await requireAdmin();
+  const adminUser = await requireAdmin();
   const admin = createAdminClient();
-  const resend = getResend();
-  const from = getFrom();
 
   const { data: request } = await admin
     .from("whitelist_requests")
@@ -183,31 +112,35 @@ export async function approveWhitelistRequest(requestId: string) {
     .eq("id", requestId)
     .single();
 
-  if (!request) throw new Error("Request not found");
+  if (!request) {
+    await logEvent({
+      service: "email",
+      level: "warn",
+      tag: "whitelist.approve",
+      message: `Approve failed: request ${requestId} not found`,
+      metadata: { requestId },
+      userId: adminUser.id,
+    });
+    throw new Error("Request not found");
+  }
 
-  // Add to whitelist
   await admin
     .from("email_whitelist")
     .upsert({ email: request.email }, { onConflict: "email" });
 
-  // Mark request as approved
   await admin
     .from("whitelist_requests")
     .update({ status: "approved" })
     .eq("id", requestId);
 
-  // Send approval email
-  try {
-    const tpl = whitelistApprovedEmail(request.name || "", request.email);
-    await resend.emails.send({
-      from,
-      to: request.email,
-      subject: tpl.subject,
-      html: tpl.html,
-    });
-  } catch {
-    // Email failed but approval succeeded
-  }
+  await logEvent({
+    service: "email",
+    level: "info",
+    tag: "whitelist.approve",
+    message: `Approved access request for ${request.email}`,
+    metadata: { requestId, email: request.email, name: request.name },
+    userId: adminUser.id,
+  });
 
-  return { email: request.email };
+  return { email: request.email, name: request.name as string | null };
 }

@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
+import { logEvent } from "@/lib/logs/logger";
 
 export async function createWorkspace(name: string, description?: string) {
   const supabase = await createClient();
@@ -99,7 +100,29 @@ export async function inviteMember(
     .select()
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    await logEvent({
+      service: "workspace",
+      level: "error",
+      tag: "invite.create",
+      message: `Invite failed for ${email}: ${error.message}`,
+      metadata: { workspaceId, email, role, code: error.code },
+      userId: user.id,
+      workspaceId,
+    });
+    throw new Error(error.message);
+  }
+
+  await logEvent({
+    service: "workspace",
+    level: "info",
+    tag: "invite.create",
+    message: `Invited ${email} as ${role}`,
+    metadata: { invitationId: data.id, email, role },
+    userId: user.id,
+    workspaceId,
+  });
+
   return data;
 }
 
@@ -120,13 +143,41 @@ export async function acceptInvitation(token: string) {
     .is("accepted_at", null)
     .single();
 
-  if (invError || !invitation) throw new Error("Invalid or expired invitation");
+  if (invError || !invitation) {
+    await logEvent({
+      service: "workspace",
+      level: "warn",
+      tag: "invite.accept",
+      message: `Invalid or expired invitation token`,
+      metadata: { token: token.slice(0, 8) + "…", error: invError?.message },
+      userId: user.id,
+    });
+    throw new Error("Invalid or expired invitation");
+  }
 
   if (new Date(invitation.expires_at) < new Date()) {
+    await logEvent({
+      service: "workspace",
+      level: "warn",
+      tag: "invite.accept",
+      message: `Expired invitation for ${invitation.email}`,
+      metadata: { invitationId: invitation.id, expiresAt: invitation.expires_at },
+      userId: user.id,
+      workspaceId: invitation.workspace_id,
+    });
     throw new Error("Invitation has expired");
   }
 
   if (invitation.email !== user.email?.toLowerCase()) {
+    await logEvent({
+      service: "workspace",
+      level: "warn",
+      tag: "invite.accept",
+      message: `Invitation email mismatch`,
+      metadata: { invitationId: invitation.id, expected: invitation.email, actual: user.email },
+      userId: user.id,
+      workspaceId: invitation.workspace_id,
+    });
     throw new Error("This invitation was sent to a different email");
   }
 
@@ -143,6 +194,16 @@ export async function acceptInvitation(token: string) {
     .update({ accepted_at: new Date().toISOString() })
     .eq("id", invitation.id);
 
+  await logEvent({
+    service: "workspace",
+    level: "info",
+    tag: "invite.accept",
+    message: `Accepted invitation as ${invitation.role}`,
+    metadata: { invitationId: invitation.id, role: invitation.role },
+    userId: user.id,
+    workspaceId: invitation.workspace_id,
+  });
+
   redirect("/dashboard");
 }
 
@@ -151,22 +212,64 @@ export async function updateMemberRole(
   role: "admin" | "editor" | "viewer"
 ) {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   const { error } = await supabase
     .from("workspace_members")
     .update({ role })
     .eq("id", memberId);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    await logEvent({
+      service: "workspace",
+      level: "error",
+      tag: "member.updateRole",
+      message: `Failed to update role: ${error.message}`,
+      metadata: { memberId, role, code: error.code },
+      userId: user?.id ?? null,
+    });
+    throw new Error(error.message);
+  }
+
+  await logEvent({
+    service: "workspace",
+    level: "info",
+    tag: "member.updateRole",
+    message: `Updated member role to ${role}`,
+    metadata: { memberId, role },
+    userId: user?.id ?? null,
+  });
 }
 
 export async function removeMember(memberId: string) {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   const { error } = await supabase
     .from("workspace_members")
     .delete()
     .eq("id", memberId);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    await logEvent({
+      service: "workspace",
+      level: "error",
+      tag: "member.remove",
+      message: `Failed to remove member: ${error.message}`,
+      metadata: { memberId, code: error.code },
+      userId: user?.id ?? null,
+    });
+    throw new Error(error.message);
+  }
+
+  await logEvent({
+    service: "workspace",
+    level: "info",
+    tag: "member.remove",
+    message: `Removed member`,
+    metadata: { memberId },
+    userId: user?.id ?? null,
+  });
 }
 
 export async function updateWorkspace(

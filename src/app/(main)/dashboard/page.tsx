@@ -4,6 +4,7 @@ import Link from "next/link";
 import { format, startOfWeek, endOfWeek, subDays } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { DashboardCharts } from "@/components/dashboard/dashboard-charts";
 import { TaskList } from "@/components/dashboard/task-list";
 import { TimerWidget } from "@/components/dashboard/timer-widget";
@@ -104,19 +105,15 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-            Hey {profile.name}, let&apos;s crush it today
-          </h1>
-          <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-            Here&apos;s what&apos;s happening in your workspace
-          </p>
-        </div>
-        <Link href="/entries/new">
-          <Button>+ New Entry</Button>
-        </Link>
-      </div>
+      <PageHeader
+        title={`Hey ${profile.name}, let's crush it today`}
+        description="Here's what's happening in your workspace"
+        actions={
+          <Link href="/entries/new">
+            <Button>+ New Entry</Button>
+          </Link>
+        }
+      />
 
       {/* Stats Grid */}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">

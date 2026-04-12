@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { FileText, Lock } from "lucide-react";
 
 export default async function PersonalPagesPage() {
@@ -19,12 +20,10 @@ export default async function PersonalPagesPage() {
   if (!workspaceId) {
     return (
       <div className="space-y-8">
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-          My Pages
-        </h1>
-        <p className="text-zinc-600 dark:text-zinc-400">
-          Please select or create a workspace first.
-        </p>
+        <PageHeader
+          title="My Pages"
+          description="Please select or create a workspace first."
+        />
       </div>
     );
   }
@@ -33,14 +32,10 @@ export default async function PersonalPagesPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-          My Pages
-        </h1>
-        <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-          Your private pages — only visible to you
-        </p>
-      </div>
+      <PageHeader
+        title="My Pages"
+        description="Your private pages — only visible to you"
+      />
 
       {pages && pages.length > 0 ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

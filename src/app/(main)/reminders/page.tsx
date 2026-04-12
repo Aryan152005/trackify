@@ -5,6 +5,8 @@ import Link from "next/link";
 import { format, parseISO, isPast } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
+import { PushSettings } from "@/components/push/push-settings";
 import { Plus, Bell } from "lucide-react";
 
 export default async function RemindersPage() {
@@ -39,18 +41,20 @@ export default async function RemindersPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">Reminders</h1>
-          <p className="mt-1 text-zinc-600 dark:text-zinc-400">Never miss a thing — set it, forget it, get notified</p>
-        </div>
-        <Link href="/reminders/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            New Reminder
-          </Button>
-        </Link>
-      </div>
+      <PageHeader
+        title="Reminders"
+        description="Never miss a thing — set it, forget it, get notified"
+        actions={
+          <Link href="/reminders/new">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              New Reminder
+            </Button>
+          </Link>
+        }
+      />
+
+      <PushSettings publicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ""} />
 
       {/* Upcoming Reminders */}
       <Card>

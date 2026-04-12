@@ -1,8 +1,8 @@
 {
   "crons": [
     {
-      "path": "/api/cron/daily-entry-reminder",
-      "schedule": "0 20 * * *"
+      "path": "/api/cron/send-reminder-pushes",
+      "schedule": "0 13 * * *"
     }
   ]
 }

@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   FileText,
   CheckSquare,
@@ -40,14 +41,10 @@ export default async function PersonalPage() {
   if (!workspaceId) {
     return (
       <div className="space-y-8">
-        <div>
-          <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-            Personal Space
-          </h1>
-          <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-            Please select or create a workspace first.
-          </p>
-        </div>
+        <PageHeader
+          title="Personal Space"
+          description="Please select or create a workspace first."
+        />
       </div>
     );
   }
@@ -100,14 +97,10 @@ export default async function PersonalPage() {
   return (
     <div className="space-y-8">
       {/* Greeting */}
-      <div>
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-          Welcome, {profile.name}
-        </h1>
-        <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-          Your personal space — private items only you can see
-        </p>
-      </div>
+      <PageHeader
+        title={`Welcome, ${profile.name}`}
+        description="Your personal space — private items only you can see"
+      />
 
       {/* Stats Grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">

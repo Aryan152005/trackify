@@ -19,6 +19,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BookingForm } from "@/components/bookings/booking-form";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   Plus,
   Trash2,
@@ -175,14 +177,10 @@ export default function BookingsPage() {
     return (
       <AnimatedPage>
         <div className="space-y-8">
-          <div>
-            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-              Bookings
-            </h1>
-            <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-              Please select or create a workspace first.
-            </p>
-          </div>
+          <PageHeader
+            title="Bookings"
+            description="Please select or create a workspace first."
+          />
         </div>
       </AnimatedPage>
     );
@@ -192,31 +190,27 @@ export default function BookingsPage() {
     <AnimatedPage>
       <div className="space-y-8">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-              Bookings
-            </h1>
-            <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-              Manage resources and reservations
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {isAdmin && (
-              <Button
-                variant="outline"
-                onClick={() => setShowResourceForm((v) => !v)}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Add Resource
+        <PageHeader
+          title="Bookings"
+          description="Manage resources and reservations"
+          actions={
+            <>
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  onClick={() => setShowResourceForm((v) => !v)}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Resource
+                </Button>
+              )}
+              <Button onClick={() => setShowBookingForm((v) => !v)}>
+                <CalendarRange className="mr-2 h-4 w-4" />
+                Book Resource
               </Button>
-            )}
-            <Button onClick={() => setShowBookingForm((v) => !v)}>
-              <CalendarRange className="mr-2 h-4 w-4" />
-              Book Resource
-            </Button>
-          </div>
-        </div>
+            </>
+          }
+        />
 
         {/* Add Resource Form (admin only) */}
         {showResourceForm && isAdmin && (
@@ -244,20 +238,24 @@ export default function BookingsPage() {
                     <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                       Type
                     </label>
-                    <select
+                    <Select
                       value={newResourceType}
-                      onChange={(e) =>
+                      onValueChange={(v) =>
                         setNewResourceType(
-                          e.target.value as "room" | "equipment" | "person" | "slot"
+                          v as "room" | "equipment" | "person" | "slot"
                         )
                       }
-                      className={inputClass}
                     >
-                      <option value="room">Room</option>
-                      <option value="equipment">Equipment</option>
-                      <option value="person">Person</option>
-                      <option value="slot">Slot</option>
-                    </select>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="room">Room</SelectItem>
+                        <SelectItem value="equipment">Equipment</SelectItem>
+                        <SelectItem value="person">Person</SelectItem>
+                        <SelectItem value="slot">Slot</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 <div>
@@ -376,18 +374,22 @@ export default function BookingsPage() {
               <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">
                 Resource
               </label>
-              <select
-                value={filterResourceId}
-                onChange={(e) => setFilterResourceId(e.target.value)}
-                className={inputClass + " w-48"}
+              <Select
+                value={filterResourceId || "__all__"}
+                onValueChange={(v) => setFilterResourceId(v === "__all__" ? "" : v)}
               >
-                <option value="">All resources</option>
-                {resources.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All resources</SelectItem>
+                  {resources.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">

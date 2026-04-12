@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   FileText, CheckSquare, Columns3, StickyNote, BarChart3,
   Bell, Users, Brain, Calendar, FileDown, Pencil, Shield,
@@ -51,12 +52,10 @@ const guides = [
 export default function HelpPage() {
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">Help & Guide</h1>
-        <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-          Learn how to get the most out of Trackify
-        </p>
-      </div>
+      <PageHeader
+        title="Help & Guide"
+        description="Learn how to get the most out of Trackify"
+      />
 
       {guides.map((section) => (
         <div key={section.category}>

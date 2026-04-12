@@ -16,6 +16,8 @@ import {
   Legend,
 } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { chartAnim, tooltipStyle, tooltipWrapper, tooltipCursor } from "@/lib/charts/theme";
+import { useIsMobile } from "@/lib/hooks/use-media-query";
 
 const COLORS = {
   indigo: "#6366f1",
@@ -38,6 +40,7 @@ interface AdminChartsProps {
 }
 
 export function AdminCharts({ dailyActivity, taskStatuses, taskPriorities, entryStatuses }: AdminChartsProps) {
+  const isMobile = useIsMobile();
   const taskStatusData = Object.entries(taskStatuses).map(([name, value]) => ({ name, value }));
   const taskPriorityData = Object.entries(taskPriorities).map(([name, value]) => ({ name, value }));
   const entryStatusData = Object.entries(entryStatuses).map(([name, value]) => ({ name, value }));
@@ -53,35 +56,55 @@ export function AdminCharts({ dailyActivity, taskStatuses, taskPriorities, entry
         <CardContent>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={dailyActivity}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
+              <AreaChart data={dailyActivity} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="adminEntries" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={COLORS.indigo} stopOpacity={0.5} />
+                    <stop offset="100%" stopColor={COLORS.indigo} stopOpacity={0.05} />
+                  </linearGradient>
+                  <linearGradient id="adminTasks" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={COLORS.emerald} stopOpacity={0.5} />
+                    <stop offset="100%" stopColor={COLORS.emerald} stopOpacity={0.05} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-700" />
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 11 }}
+                  tick={{ fontSize: isMobile ? 10 : 11, fill: "currentColor" }}
+                  tickMargin={8}
+                  interval={isMobile ? 6 : "preserveStartEnd"}
+                  angle={isMobile ? -35 : 0}
+                  textAnchor={isMobile ? "end" : "middle"}
+                  height={isMobile ? 50 : 30}
                   tickFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                 />
-                <YAxis tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: isMobile ? 10 : 11, fill: "currentColor" }} width={isMobile ? 28 : 40} />
                 <Tooltip
+                  contentStyle={tooltipStyle}
+                  wrapperStyle={tooltipWrapper}
+                  cursor={tooltipCursor}
                   labelFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}
                 />
-                <Legend />
+                {!isMobile && <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />}
                 <Area
                   type="monotone"
                   dataKey="entries"
                   stackId="1"
                   stroke={COLORS.indigo}
-                  fill={COLORS.indigo}
-                  fillOpacity={0.4}
+                  strokeWidth={2}
+                  fill="url(#adminEntries)"
                   name="Entries"
+                  {...chartAnim}
                 />
                 <Area
                   type="monotone"
                   dataKey="tasks"
                   stackId="1"
                   stroke={COLORS.emerald}
-                  fill={COLORS.emerald}
-                  fillOpacity={0.4}
+                  strokeWidth={2}
+                  fill="url(#adminTasks)"
                   name="Tasks"
+                  {...chartAnim}
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -98,24 +121,39 @@ export function AdminCharts({ dailyActivity, taskStatuses, taskPriorities, entry
         <CardContent>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={dailyActivity.filter((d) => d.avgScore > 0)}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
+              <AreaChart data={dailyActivity.filter((d) => d.avgScore > 0)} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="adminAvgScore" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={COLORS.purple} stopOpacity={0.5} />
+                    <stop offset="100%" stopColor={COLORS.purple} stopOpacity={0.05} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-700" />
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 11 }}
+                  tick={{ fontSize: isMobile ? 10 : 11, fill: "currentColor" }}
+                  tickMargin={8}
+                  interval={isMobile ? 6 : "preserveStartEnd"}
+                  angle={isMobile ? -35 : 0}
+                  textAnchor={isMobile ? "end" : "middle"}
+                  height={isMobile ? 50 : 30}
                   tickFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                 />
-                <YAxis domain={[0, 10]} tick={{ fontSize: 11 }} />
+                <YAxis domain={[0, 10]} tick={{ fontSize: isMobile ? 10 : 11, fill: "currentColor" }} width={isMobile ? 28 : 40} />
                 <Tooltip
+                  contentStyle={tooltipStyle}
+                  wrapperStyle={tooltipWrapper}
+                  cursor={tooltipCursor}
                   labelFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "long", day: "numeric" })}
                 />
                 <Area
                   type="monotone"
                   dataKey="avgScore"
                   stroke={COLORS.purple}
-                  fill={COLORS.purple}
-                  fillOpacity={0.3}
+                  strokeWidth={2.5}
+                  fill="url(#adminAvgScore)"
                   name="Avg Score"
+                  {...chartAnim}
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -133,6 +171,14 @@ export function AdminCharts({ dailyActivity, taskStatuses, taskPriorities, entry
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
+                  <defs>
+                    {PIE_COLORS.map((c, i) => (
+                      <linearGradient key={i} id={`taskStat-${i}`} x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stopColor={c} stopOpacity={0.75} />
+                        <stop offset="100%" stopColor={c} stopOpacity={1} />
+                      </linearGradient>
+                    ))}
+                  </defs>
                   <Pie
                     data={taskStatusData}
                     cx="50%"
@@ -142,12 +188,13 @@ export function AdminCharts({ dailyActivity, taskStatuses, taskPriorities, entry
                     paddingAngle={3}
                     dataKey="value"
                     label={({ name, value }) => `${name}: ${value}`}
+                    {...chartAnim}
                   >
                     {taskStatusData.map((_, i) => (
-                      <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      <Cell key={i} fill={`url(#taskStat-${i % PIE_COLORS.length})`} stroke="rgb(24 24 27)" strokeWidth={1} />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip contentStyle={tooltipStyle} wrapperStyle={tooltipWrapper} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -161,12 +208,18 @@ export function AdminCharts({ dailyActivity, taskStatuses, taskPriorities, entry
           <CardContent>
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={taskPriorityData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
-                  <XAxis type="number" tick={{ fontSize: 11 }} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={60} />
-                  <Tooltip />
-                  <Bar dataKey="value" fill={COLORS.amber} radius={[0, 4, 4, 0]} name="Count" />
+                <BarChart data={taskPriorityData} layout="vertical" margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="priBar" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor={COLORS.amber} stopOpacity={0.55} />
+                      <stop offset="100%" stopColor={COLORS.amber} stopOpacity={1} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-700" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 11, fill: "currentColor" }} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "currentColor" }} width={60} />
+                  <Tooltip contentStyle={tooltipStyle} wrapperStyle={tooltipWrapper} cursor={tooltipCursor} />
+                  <Bar dataKey="value" fill="url(#priBar)" radius={[0, 4, 4, 0]} name="Count" {...chartAnim} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -181,6 +234,14 @@ export function AdminCharts({ dailyActivity, taskStatuses, taskPriorities, entry
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
+                  <defs>
+                    {PIE_COLORS.map((c, i) => (
+                      <linearGradient key={i} id={`entStat-${i}`} x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stopColor={c} stopOpacity={0.75} />
+                        <stop offset="100%" stopColor={c} stopOpacity={1} />
+                      </linearGradient>
+                    ))}
+                  </defs>
                   <Pie
                     data={entryStatusData}
                     cx="50%"
@@ -190,12 +251,13 @@ export function AdminCharts({ dailyActivity, taskStatuses, taskPriorities, entry
                     paddingAngle={3}
                     dataKey="value"
                     label={({ name, value }) => `${name}: ${value}`}
+                    {...chartAnim}
                   >
                     {entryStatusData.map((_, i) => (
-                      <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      <Cell key={i} fill={`url(#entStat-${i % PIE_COLORS.length})`} stroke="rgb(24 24 27)" strokeWidth={1} />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip contentStyle={tooltipStyle} wrapperStyle={tooltipWrapper} />
                 </PieChart>
               </ResponsiveContainer>
             </div>

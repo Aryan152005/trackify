@@ -14,6 +14,7 @@ import { useWorkspaceId } from "@/lib/workspace/hooks";
 import { getIntegrationLogs } from "@/lib/integrations/actions";
 import type { IntegrationLog, IntegrationLogStatus } from "@/lib/integrations/types";
 import { Button } from "@/components/ui/button";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 interface IntegrationLogsProps {
@@ -116,31 +117,33 @@ export function IntegrationLogs({ integrationId }: IntegrationLogsProps) {
           {/* Status filter */}
           <div className="flex items-center gap-1.5">
             <Filter className="h-3.5 w-3.5 text-zinc-400" />
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-xs text-zinc-700 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
-            >
-              <option value="all">All statuses</option>
-              <option value="success">Success</option>
-              <option value="error">Error</option>
-              <option value="pending">Pending</option>
-            </select>
+            <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v)}>
+              <SelectTrigger className="w-auto">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="success">Success</SelectItem>
+                <SelectItem value="error">Error</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Type filter */}
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-xs text-zinc-700 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
-          >
-            <option value="all">All types</option>
-            {eventTypes.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
+          <Select value={filterType} onValueChange={(v) => setFilterType(v)}>
+            <SelectTrigger className="w-auto">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All types</SelectItem>
+              {eventTypes.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {type}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           <Button variant="ghost" size="sm" onClick={fetchLogs}>
             <RefreshCw className="h-4 w-4" />

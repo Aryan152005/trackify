@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useWorkspaceId } from "@/lib/workspace/hooks";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import type { TaskPriority } from "@/lib/types/database";
 
 export default function NewTaskPage() {
@@ -64,11 +66,13 @@ export default function NewTaskPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">New Task</h1>
-        <p className="mt-1 text-zinc-600 dark:text-zinc-400">Create a new task to track</p>
-      </div>
+    <div className="mx-auto max-w-2xl">
+      <PageHeader
+        title="New Task"
+        description="Create a new task to track"
+        backHref="/tasks"
+        backLabel="Back to Tasks"
+      />
 
       <Card>
         <CardHeader>
@@ -86,7 +90,9 @@ export default function NewTaskPage() {
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-4 py-2 text-zinc-900 placeholder-zinc-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
+                autoFocus
+                placeholder="e.g. Review Q2 roadmap"
+                className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-base text-zinc-900 placeholder-zinc-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50 sm:text-sm"
                 required
                 disabled={loading}
               />
@@ -101,7 +107,7 @@ export default function NewTaskPage() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={4}
-                className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-4 py-2 text-zinc-900 placeholder-zinc-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
+                className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-base text-zinc-900 placeholder-zinc-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50 sm:text-sm"
                 disabled={loading}
               />
             </div>
@@ -116,7 +122,7 @@ export default function NewTaskPage() {
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-4 py-2 text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
+                  className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-base text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50 sm:text-sm"
                   disabled={loading}
                 />
               </div>
@@ -130,7 +136,7 @@ export default function NewTaskPage() {
                   type="time"
                   value={dueTime}
                   onChange={(e) => setDueTime(e.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-4 py-2 text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
+                  className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-base text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50 sm:text-sm"
                   disabled={loading}
                 />
               </div>
@@ -140,27 +146,34 @@ export default function NewTaskPage() {
               <label htmlFor="priority" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Priority
               </label>
-              <select
-                id="priority"
-                value={priority}
-                onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-4 py-2 text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
-                disabled={loading}
-              >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-              </select>
+              <div className="mt-2">
+                <Select value={priority} onValueChange={(v) => setPriority(v as TaskPriority)} disabled={loading}>
+                  <SelectTrigger id="priority">
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
-            <div className="flex gap-4">
-              <Button type="submit" disabled={loading}>
-                {loading ? "Creating..." : "Create Task"}
-              </Button>
-              <Button type="button" variant="outline" onClick={() => router.back()} disabled={loading}>
+            <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end sm:gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => router.push("/tasks")}
+                disabled={loading}
+                className="w-full sm:w-auto"
+              >
                 Cancel
+              </Button>
+              <Button type="submit" disabled={loading} className="w-full sm:w-auto">
+                {loading ? "Creating..." : "Create Task"}
               </Button>
             </div>
           </form>

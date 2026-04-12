@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Send, X } from "lucide-react";
 import type { RequestType } from "@/lib/types/notification";
 
@@ -83,18 +84,18 @@ export function RequestForm({
             <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Recipient <span className="text-red-500">*</span>
             </label>
-            <select
-              value={toUserId}
-              onChange={(e) => setToUserId(e.target.value)}
-              className={inputClasses}
-            >
-              <option value="">Select a member...</option>
-              {members.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
+            <Select value={toUserId} onValueChange={(v) => setToUserId(v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a member..." />
+              </SelectTrigger>
+              <SelectContent>
+                {members.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Type */}
@@ -102,17 +103,18 @@ export function RequestForm({
             <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Type
             </label>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value as RequestType)}
-              className={inputClasses}
-            >
-              {REQUEST_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
+            <Select value={type} onValueChange={(v) => setType(v as RequestType)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {REQUEST_TYPES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Title */}

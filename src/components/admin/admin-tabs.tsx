@@ -6,11 +6,16 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/alert";
 import { AdminCharts } from "@/components/admin/admin-charts";
-import { addToWhitelist, removeFromWhitelist, approveWhitelistRequest, sendBroadcast } from "@/lib/admin/email-actions";
+import { addToWhitelist, removeFromWhitelist, approveWhitelistRequest } from "@/lib/admin/email-actions";
+import { renderWhitelistApproved, type RenderedEmail } from "@/lib/admin/preview-actions";
+import { EmailPreviewDialog } from "@/components/admin/email-preview-dialog";
+import { BroadcastComposer } from "@/components/admin/broadcast-composer";
+import { TargetedEmailComposer } from "@/components/admin/targeted-email-composer";
 import {
   Users, Shield, Mail, BarChart3, MessageSquare,
-  Plus, Trash2, Check, Send, Loader2, X,
+  Plus, Trash2, Check, Loader2, Eye,
 } from "lucide-react";
 
 const TABS = [
@@ -44,64 +49,107 @@ export function AdminTabs({ users, whitelist: initialWhitelist, whitelistRequest
 
   // Whitelist state
   const [newEmail, setNewEmail] = useState("");
-  const [sendInvite, setSendInvite] = useState(true);
   const [addingEmail, setAddingEmail] = useState(false);
-
-  // Email state
-  const [emailSubject, setEmailSubject] = useState("");
-  const [emailMessage, setEmailMessage] = useState("");
-  const [sendingEmail, setSendingEmail] = useState(false);
-  const [emailResult, setEmailResult] = useState<string | null>(null);
+  const [whitelistMsg, setWhitelistMsg] = useState<{ type: "success" | "warn" | "error"; text: string } | null>(null);
 
   // Actions
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [requestMsg, setRequestMsg] = useState<{ type: "success" | "warn" | "error"; text: string } | null>(null);
+
+  // Preview dialog state
+  const [previewPayload, setPreviewPayload] = useState<RenderedEmail | null>(null);
+
+  // User-selection state for targeted email
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
+  const toggleUser = (id: string) =>
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const clearSelection = () => setSelectedUserIds(new Set());
+  const toggleAllUsers = () =>
+    setSelectedUserIds((prev) => (prev.size === users.length ? new Set() : new Set(users.map((u) => u.id))));
+  const selectedUsers = users
+    .filter((u) => selectedUserIds.has(u.id))
+    .map((u) => ({ id: u.id, email: u.email, name: u.name }));
+
+  async function openWhitelistPreview(email: string, name = "") {
+    try {
+      const rendered = await renderWhitelistApproved(email, name);
+      setPreviewPayload(rendered);
+    } catch (err) {
+      setWhitelistMsg({
+        type: "error",
+        text: err instanceof Error ? err.message : "Failed to render preview",
+      });
+    }
+  }
+
+  function openComposerPreview(payload: RenderedEmail) {
+    setPreviewPayload(payload);
+  }
 
   async function handleAddWhitelist(e: React.FormEvent) {
     e.preventDefault();
     if (!newEmail.trim()) return;
     setAddingEmail(true);
+    setWhitelistMsg(null);
     try {
-      await addToWhitelist(newEmail, sendInvite);
-      setWhitelist((prev) => [{ email: newEmail.toLowerCase().trim(), created_at: new Date().toISOString() }, ...prev]);
+      const result = await addToWhitelist(newEmail);
+      setWhitelist((prev) => [{ email: result.email, created_at: new Date().toISOString() }, ...prev]);
       setNewEmail("");
-    } catch { /* silent */ }
+      setWhitelistMsg({
+        type: "success",
+        text: `Whitelisted ${result.email}. Opening invite email preview so you can copy and send it.`,
+      });
+      openWhitelistPreview(result.email);
+    } catch (err) {
+      setWhitelistMsg({
+        type: "error",
+        text: err instanceof Error ? err.message : "Failed to add to whitelist",
+      });
+    }
     setAddingEmail(false);
   }
 
   async function handleRemoveWhitelist(email: string) {
     setActionLoading(email);
+    setWhitelistMsg(null);
     try {
       await removeFromWhitelist(email);
       setWhitelist((prev) => prev.filter((w) => w.email !== email));
-    } catch { /* silent */ }
+    } catch (err) {
+      setWhitelistMsg({
+        type: "error",
+        text: err instanceof Error ? err.message : "Failed to remove",
+      });
+    }
     setActionLoading(null);
   }
 
   async function handleApproveRequest(requestId: string) {
     setActionLoading(requestId);
+    setRequestMsg(null);
     try {
       const result = await approveWhitelistRequest(requestId);
       setRequests((prev) => prev.map((r) => r.id === requestId ? { ...r, status: "approved" } : r));
       setWhitelist((prev) => [{ email: result.email, created_at: new Date().toISOString() }, ...prev]);
-    } catch { /* silent */ }
+      setRequestMsg({
+        type: "success",
+        text: `Approved ${result.email}. Opening invite email preview so you can send it manually.`,
+      });
+      openWhitelistPreview(result.email, result.name ?? "");
+    } catch (err) {
+      setRequestMsg({
+        type: "error",
+        text: err instanceof Error ? err.message : "Failed to approve",
+      });
+    }
     setActionLoading(null);
   }
 
-  async function handleSendBroadcast(e: React.FormEvent) {
-    e.preventDefault();
-    if (!emailSubject.trim() || !emailMessage.trim()) return;
-    setSendingEmail(true);
-    setEmailResult(null);
-    try {
-      const result = await sendBroadcast(emailSubject, emailMessage);
-      setEmailResult(`Sent to ${result.sent} user(s). ${result.failed > 0 ? `${result.failed} failed.` : ""}`);
-      setEmailSubject("");
-      setEmailMessage("");
-    } catch (err) {
-      setEmailResult(`Failed: ${err instanceof Error ? err.message : "Unknown error"}`);
-    }
-    setSendingEmail(false);
-  }
 
   return (
     <div>
@@ -140,16 +188,37 @@ export function AdminTabs({ users, whitelist: initialWhitelist, whitelistRequest
 
       {/* Users Tab */}
       {tab === "users" && (
+        <div className="space-y-6">
+          {selectedUsers.length > 0 && (
+            <TargetedEmailComposer
+              selected={selectedUsers}
+              onPreview={openComposerPreview}
+              onClear={clearSelection}
+              onDeselect={toggleUser}
+            />
+          )}
         <Card>
           <CardHeader>
             <CardTitle>All Users ({users.length})</CardTitle>
-            <CardDescription>Click a user to view their detailed activity</CardDescription>
+            <CardDescription>Select users with the checkboxes to email them directly.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-zinc-200 text-left dark:border-zinc-800">
+                    <th className="w-8 pb-3">
+                      <input
+                        type="checkbox"
+                        checked={users.length > 0 && selectedUserIds.size === users.length}
+                        ref={(el) => {
+                          if (el) el.indeterminate = selectedUserIds.size > 0 && selectedUserIds.size < users.length;
+                        }}
+                        onChange={toggleAllUsers}
+                        className="rounded"
+                        aria-label="Select all users"
+                      />
+                    </th>
                     <th className="pb-3 font-medium text-zinc-500">Name</th>
                     <th className="pb-3 font-medium text-zinc-500">Email</th>
                     <th className="pb-3 font-medium text-zinc-500">Entries</th>
@@ -161,6 +230,15 @@ export function AdminTabs({ users, whitelist: initialWhitelist, whitelistRequest
                 <tbody>
                   {users.map((u) => (
                     <tr key={u.id} className="border-b border-zinc-100 dark:border-zinc-800/50">
+                      <td className="py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedUserIds.has(u.id)}
+                          onChange={() => toggleUser(u.id)}
+                          className="rounded"
+                          aria-label={`Select ${u.name}`}
+                        />
+                      </td>
                       <td className="py-3">
                         <Link href={`/admin/users/${u.id}`} className="font-medium text-indigo-600 hover:underline dark:text-indigo-400">
                           {u.name}
@@ -180,15 +258,17 @@ export function AdminTabs({ users, whitelist: initialWhitelist, whitelistRequest
             </div>
           </CardContent>
         </Card>
+        </div>
       )}
 
       {/* Whitelist Tab */}
       {tab === "whitelist" && (
         <div className="space-y-6">
+          {whitelistMsg && <Alert type={whitelistMsg.type}>{whitelistMsg.text}</Alert>}
           <Card>
             <CardHeader>
               <CardTitle>Add to Whitelist</CardTitle>
-              <CardDescription>Whitelist an email to allow signup. Optionally send an invite email.</CardDescription>
+              <CardDescription>Whitelist an email to allow signup. After adding, the invite email opens in a preview dialog for you to copy and send manually.</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleAddWhitelist} className="flex flex-wrap gap-3">
@@ -198,12 +278,8 @@ export function AdminTabs({ users, whitelist: initialWhitelist, whitelistRequest
                   onChange={(e) => setNewEmail(e.target.value)}
                   placeholder="user@example.com"
                   required
-                  className="flex-1 min-w-[200px] rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+                  className="flex-1 min-w-[200px] rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-base focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 sm:text-sm"
                 />
-                <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  <input type="checkbox" checked={sendInvite} onChange={(e) => setSendInvite(e.target.checked)} className="rounded" />
-                  Send invite email
-                </label>
                 <Button type="submit" disabled={addingEmail} size="sm">
                   {addingEmail ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="mr-1 h-4 w-4" />}
                   Add
@@ -219,18 +295,28 @@ export function AdminTabs({ users, whitelist: initialWhitelist, whitelistRequest
             <CardContent>
               <div className="space-y-2">
                 {whitelist.map((w) => (
-                  <div key={w.email} className="flex items-center justify-between rounded-lg border border-zinc-100 px-4 py-2.5 dark:border-zinc-800">
-                    <div>
-                      <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{w.email}</p>
+                  <div key={w.email} className="flex items-center justify-between gap-3 rounded-lg border border-zinc-100 px-4 py-2.5 dark:border-zinc-800">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-200">{w.email}</p>
                       <p className="text-xs text-zinc-400">Added {format(new Date(w.created_at), "MMM d, yyyy")}</p>
                     </div>
-                    <button
-                      onClick={() => handleRemoveWhitelist(w.email)}
-                      disabled={actionLoading === w.email}
-                      className="rounded p-1.5 text-zinc-400 transition hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20"
-                    >
-                      {actionLoading === w.email ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                    </button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        onClick={() => openWhitelistPreview(w.email)}
+                        className="rounded p-1.5 text-zinc-400 transition hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-950/30"
+                        title="Preview & copy invite email"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleRemoveWhitelist(w.email)}
+                        disabled={actionLoading === w.email}
+                        className="rounded p-1.5 text-zinc-400 transition hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20"
+                        title="Remove from whitelist"
+                      >
+                        {actionLoading === w.email ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -241,51 +327,18 @@ export function AdminTabs({ users, whitelist: initialWhitelist, whitelistRequest
 
       {/* Email Tab */}
       {tab === "email" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Send Email to All Users</CardTitle>
-            <CardDescription>Broadcast a notification, announcement, or maintenance notice to every user.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSendBroadcast} className="space-y-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Subject</label>
-                <input
-                  type="text"
-                  value={emailSubject}
-                  onChange={(e) => setEmailSubject(e.target.value)}
-                  placeholder="e.g. New Feature: Mind Maps are here!"
-                  required
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Message</label>
-                <textarea
-                  rows={5}
-                  value={emailMessage}
-                  onChange={(e) => setEmailMessage(e.target.value)}
-                  placeholder="Write your message here. HTML is not supported — plain text only."
-                  required
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
-                />
-              </div>
-              {emailResult && (
-                <div className={`rounded-lg px-3 py-2 text-sm ${emailResult.startsWith("Failed") ? "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300" : "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300"}`}>
-                  {emailResult}
-                </div>
-              )}
-              <Button type="submit" disabled={sendingEmail}>
-                {sendingEmail ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                Send to {users.length} user(s)
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+        <div className="space-y-6">
+          <BroadcastComposer
+            previewRecipient={users[0]?.email ?? "preview@example.com"}
+            onPreview={openComposerPreview}
+          />
+        </div>
       )}
 
       {/* Access Requests Tab */}
       {tab === "requests" && (
+        <div className="space-y-4">
+          {requestMsg && <Alert type={requestMsg.type}>{requestMsg.text}</Alert>}
         <Card>
           <CardHeader>
             <CardTitle>Access Requests</CardTitle>
@@ -329,7 +382,14 @@ export function AdminTabs({ users, whitelist: initialWhitelist, whitelistRequest
             )}
           </CardContent>
         </Card>
+        </div>
       )}
+
+      <EmailPreviewDialog
+        open={!!previewPayload}
+        onOpenChange={(o) => !o && setPreviewPayload(null)}
+        payload={previewPayload}
+      />
     </div>
   );
 }

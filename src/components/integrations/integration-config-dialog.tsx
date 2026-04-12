@@ -21,6 +21,7 @@ import {
   type IntegrationType,
 } from "@/lib/integrations/types";
 import { Button } from "@/components/ui/button";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 interface IntegrationConfigDialogProps {
@@ -264,18 +265,21 @@ export function IntegrationConfigDialog({
                   })}
                 </div>
               ) : field.type === "select" && field.options ? (
-                <select
+                <Select
                   value={configValues[field.key] ?? ""}
-                  onChange={(e) => updateConfigValue(field.key, e.target.value)}
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+                  onValueChange={(v) => updateConfigValue(field.key, v)}
                 >
-                  <option value="">Select...</option>
-                  {field.options.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {field.options.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               ) : field.type === "textarea" ? (
                 <textarea
                   value={configValues[field.key] ?? ""}

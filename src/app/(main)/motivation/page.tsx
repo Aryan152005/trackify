@@ -7,6 +7,7 @@ import { useWorkspaceId } from "@/lib/workspace/hooks";
 import { format } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { Sparkles } from "lucide-react";
 
 export default function MotivationPage() {
@@ -102,12 +103,10 @@ export default function MotivationPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">Daily Motivation</h1>
-        <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-          Set your intention for {format(new Date(), "MMMM d, yyyy")}
-        </p>
-      </div>
+      <PageHeader
+        title="Daily Motivation"
+        description={`Set your intention for ${format(new Date(), "MMMM d, yyyy")}`}
+      />
 
       <Card>
         <CardHeader>

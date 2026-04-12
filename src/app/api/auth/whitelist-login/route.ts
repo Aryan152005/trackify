@@ -1,5 +1,6 @@
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { logEvent } from "@/lib/logs/logger";
 
 /**
  * Email whitelist check: verifies email is whitelisted and ensures user exists in Auth with password.
@@ -42,6 +43,13 @@ export async function POST(request: Request) {
       );
     }
     if (!whitelistEntry) {
+      await logEvent({
+        service: "auth",
+        level: "warn",
+        tag: "login.notWhitelisted",
+        message: `Login blocked — email not whitelisted`,
+        metadata: { email: normalizedEmail },
+      });
       return NextResponse.json(
         { error: "Email not whitelisted. Contact admin to add your email." },
         { status: 403 }
@@ -63,11 +71,26 @@ export async function POST(request: Request) {
       });
 
       if (createError) {
+        await logEvent({
+          service: "auth",
+          level: "error",
+          tag: "login.createFailed",
+          message: `Account auto-create failed: ${createError.message}`,
+          metadata: { email: normalizedEmail },
+        });
         return NextResponse.json(
           { error: "Could not create account. Contact admin." },
           { status: 500 }
         );
       }
+
+      await logEvent({
+        service: "auth",
+        level: "info",
+        tag: "login.autoCreated",
+        message: `Auto-created account for whitelisted email ${normalizedEmail}`,
+        metadata: { email: normalizedEmail, hadPassword: !!password },
+      });
 
       // If no password provided, user needs to set one
       if (!password) {
@@ -80,7 +103,13 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Whitelist login error:", error);
+    await logEvent({
+      service: "auth",
+      level: "error",
+      tag: "login.exception",
+      message: `Unhandled login exception`,
+      metadata: { error: error instanceof Error ? error.message : String(error) },
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

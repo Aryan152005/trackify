@@ -2,6 +2,8 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { chartAnim, tooltipStyle, tooltipWrapper, tooltipCursor } from "@/lib/charts/theme";
+import { useIsMobile } from "@/lib/hooks/use-media-query";
 
 interface TagPerformanceProps {
   entries: Array<{
@@ -12,6 +14,7 @@ interface TagPerformanceProps {
 }
 
 export function TagPerformance({ entries, tags }: TagPerformanceProps) {
+  const isMobile = useIsMobile();
   // Calculate tag performance
   const tagStats = tags.map((tag) => {
     const tagEntries = entries.filter((entry) =>
@@ -41,32 +44,40 @@ export function TagPerformance({ entries, tags }: TagPerformanceProps) {
       </CardHeader>
       <CardContent>
         {tagStats.length > 0 ? (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={tagStats} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-700" />
-              <XAxis type="number" className="text-xs" tick={{ fill: "currentColor" }} />
+          <div className="h-[260px] sm:h-[300px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={tagStats} layout="vertical" margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+              <defs>
+                {tagStats.map((t, i) => (
+                  <linearGradient key={i} id={`tagBar-${i}`} x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor={t.color} stopOpacity={0.55} />
+                    <stop offset="100%" stopColor={t.color} stopOpacity={1} />
+                  </linearGradient>
+                ))}
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-700" horizontal={false} />
+              <XAxis type="number" className="text-xs" tick={{ fill: "currentColor", fontSize: isMobile ? 10 : 12 }} />
               <YAxis
                 dataKey="name"
                 type="category"
-                width={100}
+                width={isMobile ? 72 : 100}
                 className="text-xs"
-                tick={{ fill: "currentColor" }}
+                tick={{ fill: "currentColor", fontSize: isMobile ? 10 : 12 }}
               />
               <Tooltip
-                contentStyle={{
-                  backgroundColor: "var(--background)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "8px",
-                }}
+                contentStyle={tooltipStyle}
+                wrapperStyle={tooltipWrapper}
+                cursor={tooltipCursor}
                 formatter={(value: number) => [`${value} entries`, "Count"]}
               />
-              <Bar dataKey="entries" radius={[0, 8, 8, 0]}>
+              <Bar dataKey="entries" radius={[0, 8, 8, 0]} {...chartAnim}>
                 {tagStats.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
+                  <Cell key={`cell-${index}`} fill={`url(#tagBar-${index})`} />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          </div>
         ) : (
           <div className="flex h-[300px] items-center justify-center text-zinc-500 dark:text-zinc-400">
             No tag data available

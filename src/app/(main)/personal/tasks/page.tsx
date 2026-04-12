@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
+import { PageHeader } from "@/components/ui/page-header";
 import { CheckSquare, Lock } from "lucide-react";
 
 export default async function PersonalTasksPage() {
@@ -27,12 +28,10 @@ export default async function PersonalTasksPage() {
   if (!workspaceId) {
     return (
       <div className="space-y-8">
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-          My Tasks
-        </h1>
-        <p className="text-zinc-600 dark:text-zinc-400">
-          Please select or create a workspace first.
-        </p>
+        <PageHeader
+          title="My Tasks"
+          description="Please select or create a workspace first."
+        />
       </div>
     );
   }
@@ -47,17 +46,11 @@ export default async function PersonalTasksPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <div className="flex items-center gap-2">
-          <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-            My Tasks
-          </h1>
-          <Lock className="h-5 w-5 text-amber-500" />
-        </div>
-        <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-          Your private tasks — only visible to you
-        </p>
-      </div>
+      <PageHeader
+        title="My Tasks"
+        description="Your private tasks — only visible to you"
+        actions={<Lock className="h-5 w-5 text-amber-500" />}
+      />
 
       {/* Pending */}
       <Card>

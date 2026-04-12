@@ -6,6 +6,7 @@ import { useWorkspaceId } from "@/lib/workspace/hooks";
 import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { FileText, Download, FileSpreadsheet, File } from "lucide-react";
 import { generateDocxReport } from "@/lib/reports/docx";
 import { generatePdfReport } from "@/lib/reports/pdf";
@@ -100,12 +101,10 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">Reports & Export</h1>
-        <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-          Export beautiful reports to share with your team
-        </p>
-      </div>
+      <PageHeader
+        title="Reports & Export"
+        description="Export beautiful reports to share with your team"
+      />
 
       <Card>
         <CardHeader>

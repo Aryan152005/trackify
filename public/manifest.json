@@ -22,6 +22,36 @@
       "purpose": "any maskable"
     }
   ],
+  "shortcuts": [
+    {
+      "name": "New Task",
+      "short_name": "Task",
+      "description": "Create a new task",
+      "url": "/tasks/new",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "New Entry",
+      "short_name": "Entry",
+      "description": "Log a new work entry",
+      "url": "/entries/new",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "New Reminder",
+      "short_name": "Reminder",
+      "description": "Set a new reminder",
+      "url": "/reminders/new",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "Jump to your dashboard",
+      "url": "/dashboard",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
   "screenshots": [],
   "categories": ["productivity", "business"],
   "prefer_related_applications": false

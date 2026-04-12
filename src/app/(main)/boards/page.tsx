@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { AnimatedPage } from "@/components/ui/animated-layout";
 import { Plus, LayoutDashboard, Columns3 } from "lucide-react";
 
@@ -27,14 +28,10 @@ export default async function BoardsPage() {
     return (
       <AnimatedPage>
         <div className="space-y-8">
-          <div>
-            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-              Boards
-            </h1>
-            <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-              Please select or create a workspace first.
-            </p>
-          </div>
+          <PageHeader
+            title="Boards"
+            description="Please select or create a workspace first."
+          />
         </div>
       </AnimatedPage>
     );
@@ -50,22 +47,18 @@ export default async function BoardsPage() {
     <AnimatedPage>
       <div className="space-y-8">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-              Boards
-            </h1>
-            <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-              Drag, drop, and organize your work visually
-            </p>
-          </div>
-          <Link href="/boards/new">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Board
-            </Button>
-          </Link>
-        </div>
+        <PageHeader
+          title="Boards"
+          description="Drag, drop, and organize your work visually"
+          actions={
+            <Link href="/boards/new">
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Create Board
+              </Button>
+            </Link>
+          }
+        />
 
         {/* Board grid */}
         {boards && boards.length > 0 ? (

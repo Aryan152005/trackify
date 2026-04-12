@@ -1,5 +1,6 @@
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { logEvent } from "@/lib/logs/logger";
 
 /**
  * Email whitelist signup: verifies email is whitelisted and creates user with password.
@@ -48,6 +49,13 @@ export async function POST(request: Request) {
       );
     }
     if (!whitelistEntry) {
+      await logEvent({
+        service: "auth",
+        level: "warn",
+        tag: "signup.notWhitelisted",
+        message: `Signup blocked — email not whitelisted`,
+        metadata: { email: normalizedEmail },
+      });
       return NextResponse.json(
         { error: "Email not whitelisted. Contact admin to add your email." },
         { status: 403 }
@@ -74,16 +82,36 @@ export async function POST(request: Request) {
     });
 
     if (createError) {
-      console.error("User creation error:", createError);
+      await logEvent({
+        service: "auth",
+        level: "error",
+        tag: "signup.createFailed",
+        message: `Account creation failed: ${createError.message}`,
+        metadata: { email: normalizedEmail, error: createError.message },
+      });
       return NextResponse.json(
         { error: createError.message || "Could not create account. Contact admin." },
         { status: 500 }
       );
     }
 
+    await logEvent({
+      service: "auth",
+      level: "info",
+      tag: "signup.success",
+      message: `Account created for ${normalizedEmail}`,
+      metadata: { email: normalizedEmail },
+    });
+
     return NextResponse.json({ success: true, message: "Account created successfully" });
   } catch (error) {
-    console.error("Whitelist signup error:", error);
+    await logEvent({
+      service: "auth",
+      level: "error",
+      tag: "signup.exception",
+      message: `Unhandled signup exception`,
+      metadata: { error: error instanceof Error ? error.message : String(error) },
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

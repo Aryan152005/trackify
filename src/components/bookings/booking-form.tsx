@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import type { BookableResource } from "@/lib/types/calendar";
 
 interface BookingFormProps {
@@ -54,21 +55,18 @@ export function BookingForm({ resources, onSubmit, onCancel }: BookingFormProps)
             <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Resource
             </label>
-            <select
-              value={resourceId}
-              onChange={(e) => setResourceId(e.target.value)}
-              className={inputClass}
-              required
-            >
-              <option value="" disabled>
-                Select a resource
-              </option>
-              {resources.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name} ({r.type})
-                </option>
-              ))}
-            </select>
+            <Select value={resourceId} onValueChange={(v) => setResourceId(v)} required>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a resource" />
+              </SelectTrigger>
+              <SelectContent>
+                {resources.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>
+                    {r.name} ({r.type})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Start time */}

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { AnalyticsCharts } from "@/components/analytics/analytics-charts";
 import { TagPerformance } from "@/components/analytics/tag-performance";
 import { ProductivityHeatmap } from "@/components/analytics/productivity-heatmap";
@@ -98,22 +99,18 @@ export default async function AnalyticsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-            Analytics Dashboard
-          </h1>
-          <p className="mt-2 text-lg text-zinc-600 dark:text-zinc-400">
-            See the big picture — trends, patterns, and insights from your work
-          </p>
-        </div>
-        <Link href="/dashboard/customize">
-          <Button variant="outline" className="gap-2">
-            <LayoutDashboard className="h-4 w-4" />
-            Custom Dashboard
-          </Button>
-        </Link>
-      </div>
+      <PageHeader
+        title="Analytics Dashboard"
+        description="See the big picture — trends, patterns, and insights from your work"
+        actions={
+          <Link href="/dashboard/customize">
+            <Button variant="outline" className="gap-2">
+              <LayoutDashboard className="h-4 w-4" />
+              Custom Dashboard
+            </Button>
+          </Link>
+        }
+      />
 
       {/* Advanced KPI Cards + Heatmap + Charts */}
       {workspaceId && (

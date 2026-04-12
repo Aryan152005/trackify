@@ -20,6 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
   createAutomation,
@@ -248,62 +249,74 @@ export function TaskAutomations({ workspaceId }: TaskAutomationsProps) {
                       <Zap className="h-3.5 w-3.5 text-amber-500" />
                       When (Trigger)
                     </h4>
-                    <select
+                    <Select
                       value={triggerType}
-                      onChange={(e) => {
-                        setTriggerType(
-                          e.target.value as AutomationTriggerType
-                        );
+                      onValueChange={(v) => {
+                        setTriggerType(v as AutomationTriggerType);
                         setTriggerConfig({});
                       }}
-                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
                     >
-                      {Object.entries(TRIGGER_LABELS).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(TRIGGER_LABELS).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
 
                     {/* Trigger config based on type */}
                     {triggerType === "status_change" && (
                       <div className="space-y-2">
-                        <select
-                          value={triggerConfig.from_status ?? ""}
-                          onChange={(e) =>
+                        <Select
+                          value={triggerConfig.from_status ?? "__any__"}
+                          onValueChange={(v) =>
                             setTriggerConfig({
                               ...triggerConfig,
-                              from_status: (e.target.value ||
-                                undefined) as TaskStatus | undefined,
+                              from_status: (v === "__any__"
+                                ? undefined
+                                : (v as TaskStatus)),
                             })
                           }
-                          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
                         >
-                          <option value="">From any status</option>
-                          {STATUS_OPTIONS.map((s) => (
-                            <option key={s.value} value={s.value}>
-                              From: {s.label}
-                            </option>
-                          ))}
-                        </select>
-                        <select
-                          value={triggerConfig.to_status ?? ""}
-                          onChange={(e) =>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__any__">From any status</SelectItem>
+                            {STATUS_OPTIONS.map((s) => (
+                              <SelectItem key={s.value} value={s.value}>
+                                From: {s.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select
+                          value={triggerConfig.to_status ?? "__any__"}
+                          onValueChange={(v) =>
                             setTriggerConfig({
                               ...triggerConfig,
-                              to_status: (e.target.value ||
-                                undefined) as TaskStatus | undefined,
+                              to_status: (v === "__any__"
+                                ? undefined
+                                : (v as TaskStatus)),
                             })
                           }
-                          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
                         >
-                          <option value="">To any status</option>
-                          {STATUS_OPTIONS.map((s) => (
-                            <option key={s.value} value={s.value}>
-                              To: {s.label}
-                            </option>
-                          ))}
-                        </select>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__any__">To any status</SelectItem>
+                            {STATUS_OPTIONS.map((s) => (
+                              <SelectItem key={s.value} value={s.value}>
+                                To: {s.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     )}
                   </div>
@@ -314,44 +327,47 @@ export function TaskAutomations({ workspaceId }: TaskAutomationsProps) {
                       <ArrowRight className="h-3.5 w-3.5 text-indigo-500" />
                       Then (Action)
                     </h4>
-                    <select
+                    <Select
                       value={actionType}
-                      onChange={(e) => {
-                        setActionType(
-                          e.target.value as AutomationActionType
-                        );
+                      onValueChange={(v) => {
+                        setActionType(v as AutomationActionType);
                         setActionConfig({});
                       }}
-                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
                     >
-                      {Object.entries(ACTION_LABELS).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(ACTION_LABELS).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
 
                     {/* Action config based on type */}
                     {actionType === "change_status" && (
-                      <select
+                      <Select
                         value={actionConfig.target_status ?? ""}
-                        onChange={(e) =>
+                        onValueChange={(v) =>
                           setActionConfig({
                             ...actionConfig,
-                            target_status: e.target.value as TaskStatus,
+                            target_status: v as TaskStatus,
                           })
                         }
-                        className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
                       >
-                        <option value="" disabled>
-                          Select target status
-                        </option>
-                        {STATUS_OPTIONS.map((s) => (
-                          <option key={s.value} value={s.value}>
-                            {s.label}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select target status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {STATUS_OPTIONS.map((s) => (
+                            <SelectItem key={s.value} value={s.value}>
+                              {s.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     )}
 
                     {actionType === "notify" && (

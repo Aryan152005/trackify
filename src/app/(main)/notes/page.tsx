@@ -8,6 +8,7 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { AnimatedPage, AnimatedList, AnimatedItem } from "@/components/ui/animated-layout";
 import { Plus, FileText } from "lucide-react";
 
@@ -24,14 +25,10 @@ export default async function NotesPage() {
     return (
       <AnimatedPage>
         <div className="space-y-8">
-          <div>
-            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-              Notes
-            </h1>
-            <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-              Please select or create a workspace first.
-            </p>
-          </div>
+          <PageHeader
+            title="Notes"
+            description="Please select or create a workspace first."
+          />
         </div>
       </AnimatedPage>
     );
@@ -48,22 +45,18 @@ export default async function NotesPage() {
     <AnimatedPage>
       <div className="space-y-8">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-              Notes
-            </h1>
-            <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-              Your second brain — capture ideas, write docs, plan anything
-            </p>
-          </div>
-          <Link href="/notes/new">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              New Page
-            </Button>
-          </Link>
-        </div>
+        <PageHeader
+          title="Notes"
+          description="Your second brain — capture ideas, write docs, plan anything"
+          actions={
+            <Link href="/notes/new">
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                New Page
+              </Button>
+            </Link>
+          }
+        />
 
         {/* Pages list */}
         {pages && pages.length > 0 ? (

@@ -3,6 +3,10 @@ import { getWhitelist, getWhitelistRequests } from "@/lib/admin/email-actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdminCharts } from "@/components/admin/admin-charts";
 import { AdminTabs } from "@/components/admin/admin-tabs";
+import { PageHeader } from "@/components/ui/page-header";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { Activity } from "lucide-react";
 import { format } from "date-fns";
 
 export default async function AdminDashboard() {
@@ -35,17 +39,23 @@ export default async function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">Admin Dashboard</h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            Manage users, whitelist, emails, and monitor platform health
-          </p>
-        </div>
-        <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
-          Admin Only
-        </span>
-      </div>
+      <PageHeader
+        title="Admin Dashboard"
+        description="Manage users, whitelist, emails, and monitor platform health"
+        actions={
+          <>
+            <Link href="/admin/logs">
+              <Button variant="outline" size="sm">
+                <Activity className="mr-1.5 h-4 w-4" />
+                System Logs
+              </Button>
+            </Link>
+            <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+              Admin Only
+            </span>
+          </>
+        }
+      />
 
       {/* Key Metrics Row */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

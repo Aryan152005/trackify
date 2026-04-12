@@ -5,6 +5,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { X, Trash2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import type { TaskCard } from "@/lib/types/board";
 
 interface TaskDetailModalProps {
@@ -176,18 +177,18 @@ export function TaskDetailModal({
                 >
                   Status
                 </label>
-                <select
-                  id="task-status"
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
-                >
-                  {STATUS_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
+                <Select value={status} onValueChange={(v) => setStatus(v)}>
+                  <SelectTrigger id="task-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>
@@ -197,18 +198,18 @@ export function TaskDetailModal({
                 >
                   Priority
                 </label>
-                <select
-                  id="task-priority"
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value)}
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
-                >
-                  {PRIORITY_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
+                <Select value={priority} onValueChange={(v) => setPriority(v)}>
+                  <SelectTrigger id="task-priority">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PRIORITY_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -237,21 +238,24 @@ export function TaskDetailModal({
                 >
                   Assignee
                 </label>
-                <select
-                  id="task-assignee"
-                  value={assignedTo ?? ""}
-                  onChange={(e) =>
-                    setAssignedTo(e.target.value || null)
+                <Select
+                  value={assignedTo ?? "__unassigned__"}
+                  onValueChange={(v) =>
+                    setAssignedTo(v === "__unassigned__" ? null : v)
                   }
-                  className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
                 >
-                  <option value="">Unassigned</option>
-                  {members.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id="task-assignee">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                    {members.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {m.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 

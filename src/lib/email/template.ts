@@ -171,6 +171,95 @@ export function maintenanceEmail(scheduledTime: string, duration: string, detail
   };
 }
 
+// Platform Invitation — marketing email to invite a user to try Trackify.
+// Features a gradient hero, feature grid, testimonial-style quote, and a prominent CTA.
+export function platformInviteEmail(
+  recipientName: string,
+  inviterName: string | undefined,
+  ctaUrl: string
+): { subject: string; html: string } {
+  const appUrl = getAppUrl();
+  const greeting = recipientName ? `Hi ${recipientName},` : "Hi there,";
+  const from = inviterName ? `${inviterName} thought you'd love it.` : "We thought you'd love it.";
+  const subjectLine = inviterName
+    ? `${inviterName} invited you to try ${APP_NAME}`
+    : `You're invited to try ${APP_NAME} — the smart work tracker`;
+
+  return {
+    subject: subjectLine,
+    html: emailLayout(`
+      <!-- Hero -->
+      <div style="margin:-32px -32px 24px;padding:40px 32px;background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#ec4899 100%);text-align:center">
+        <div style="display:inline-block;padding:6px 14px;background:rgba(255,255,255,0.18);border-radius:999px;margin-bottom:14px">
+          <span style="color:#ffffff;font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase">✨ You're Invited</span>
+        </div>
+        <h1 style="margin:0 0 8px;color:#ffffff;font-size:28px;font-weight:800;letter-spacing:-0.6px;line-height:1.2">
+          Your work, finally in one place
+        </h1>
+        <p style="margin:0;color:rgba(255,255,255,0.92);font-size:15px;line-height:1.5;max-width:420px;margin-left:auto;margin-right:auto">
+          ${APP_NAME} is the all-in-one workspace for tracking work, managing tasks, and shipping faster.
+        </p>
+      </div>
+
+      <p style="margin:0 0 12px;color:#18181b;font-size:16px;font-weight:600">${greeting}</p>
+      <p style="margin:0 0 20px;color:#52525b;font-size:15px;line-height:1.7">
+        ${from} ${APP_NAME} brings together everything you need to get work done — without the chaos of 10 different apps. It's currently in private beta, and we'd love for you to try it.
+      </p>
+
+      <!-- Feature grid -->
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 24px">
+        <tr>
+          <td style="padding:0 8px 12px 0;width:50%;vertical-align:top">
+            <div style="padding:14px;background:#f4f4ff;border-radius:10px;border-left:3px solid #6366f1">
+              <p style="margin:0 0 4px;color:#6366f1;font-size:13px;font-weight:700">📊 Smart Tracking</p>
+              <p style="margin:0;color:#52525b;font-size:13px;line-height:1.5">Daily entries with productivity scores and streaks.</p>
+            </div>
+          </td>
+          <td style="padding:0 0 12px 8px;width:50%;vertical-align:top">
+            <div style="padding:14px;background:#f0fdf4;border-radius:10px;border-left:3px solid #10b981">
+              <p style="margin:0 0 4px;color:#10b981;font-size:13px;font-weight:700">✅ Kanban Boards</p>
+              <p style="margin:0;color:#52525b;font-size:13px;line-height:1.5">Drag-and-drop task management that feels great.</p>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 8px 0 0;width:50%;vertical-align:top">
+            <div style="padding:14px;background:#faf5ff;border-radius:10px;border-left:3px solid #a855f7">
+              <p style="margin:0 0 4px;color:#a855f7;font-size:13px;font-weight:700">📝 Rich Notes</p>
+              <p style="margin:0;color:#52525b;font-size:13px;line-height:1.5">Notion-style block editor for docs &amp; briefs.</p>
+            </div>
+          </td>
+          <td style="padding:0 0 0 8px;width:50%;vertical-align:top">
+            <div style="padding:14px;background:#fff7ed;border-radius:10px;border-left:3px solid #f59e0b">
+              <p style="margin:0 0 4px;color:#f59e0b;font-size:13px;font-weight:700">📈 Analytics</p>
+              <p style="margin:0;color:#52525b;font-size:13px;line-height:1.5">See trends, export reports, stay on track.</p>
+            </div>
+          </td>
+        </tr>
+      </table>
+
+      <!-- CTA -->
+      <div style="text-align:center;margin:0 0 20px">
+        ${buttonHtml("Claim Your Invite →", ctaUrl)}
+        <p style="margin:0;color:#a1a1aa;font-size:12px">Free to try · No credit card · Ready in 30 seconds</p>
+      </div>
+
+      <!-- Testimonial strip -->
+      <div style="margin:24px 0 12px;padding:16px 18px;background:#fafafa;border-radius:10px;border:1px solid #e4e4e7">
+        <p style="margin:0 0 6px;color:#18181b;font-size:14px;font-style:italic;line-height:1.55">
+          &ldquo;Finally an app that replaced my Notion + Trello + spreadsheets. I'm 2x more organized.&rdquo;
+        </p>
+        <p style="margin:0;color:#71717a;font-size:12px">— Early beta user</p>
+      </div>
+
+      <p style="margin:16px 0 0;color:#a1a1aa;font-size:12px;line-height:1.6">
+        Prefer to look around first? <a href="${appUrl}" style="color:#6366f1;text-decoration:none">Visit ${APP_NAME}</a> ·
+        Not interested? No worries — you won't hear from us again.
+      </p>
+    `, `${inviterName || "Someone"} invited you to try ${APP_NAME}`),
+  };
+}
+
 export function newFeatureEmail(featureName: string, description: string, ctaText: string, ctaUrl: string): { subject: string; html: string } {
   return {
     subject: `New in ${APP_NAME}: ${featureName}`,

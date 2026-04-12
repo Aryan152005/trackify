@@ -4,6 +4,7 @@ import { useState } from "react";
 import { submitFeedback } from "@/lib/feedback/actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { CheckCircle, Star } from "lucide-react";
 
 const TYPES = [
@@ -54,12 +55,10 @@ export default function FeedbackPage() {
 
   return (
     <div className="mx-auto max-w-xl space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">Send Feedback</h1>
-        <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-          Help us improve Trackify — your feedback shapes what we build next
-        </p>
-      </div>
+      <PageHeader
+        title="Send Feedback"
+        description="Help us improve Trackify — your feedback shapes what we build next"
+      />
 
       <Card>
         <CardContent className="pt-6">
