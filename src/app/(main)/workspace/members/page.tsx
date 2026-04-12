@@ -54,22 +54,39 @@ export default function WorkspaceMembersPage() {
   const loadAll = useCallback(async () => {
     if (!workspace) return;
     const supabase = createClient();
-    const { data } = await supabase
+    // Two-step lookup — workspace_members.user_id FKs auth.users, so PostgREST
+    // can't embed user_profiles via the FK hint (it 400s silently).
+    const { data: rawMembers } = await supabase
       .from("workspace_members")
-      .select("id, user_id, role, joined_at, user_profiles(name, avatar_url)")
+      .select("id, user_id, role, joined_at")
       .eq("workspace_id", workspace.id)
       .order("joined_at", { ascending: true });
-    if (data) {
+
+    if (rawMembers && rawMembers.length > 0) {
+      const userIds = rawMembers.map((m) => m.user_id as string);
+      const { data: profiles } = await supabase
+        .from("user_profiles")
+        .select("user_id, name, avatar_url")
+        .in("user_id", userIds);
+      const pmap = new Map<string, { name: string; avatar_url: string | null }>();
+      for (const p of profiles ?? []) {
+        pmap.set(p.user_id as string, {
+          name: (p.name as string) ?? "Unknown",
+          avatar_url: (p.avatar_url as string) ?? null,
+        });
+      }
       setMembers(
-        data.map((m) => ({
-          id: m.id,
-          user_id: m.user_id,
+        rawMembers.map((m) => ({
+          id: m.id as string,
+          user_id: m.user_id as string,
           role: m.role as WorkspaceRole,
-          joined_at: m.joined_at,
-          name: (m.user_profiles as unknown as { name: string })?.name || "Unknown",
-          avatar_url: (m.user_profiles as unknown as { avatar_url: string | null })?.avatar_url || null,
+          joined_at: m.joined_at as string,
+          name: pmap.get(m.user_id as string)?.name ?? "Unknown",
+          avatar_url: pmap.get(m.user_id as string)?.avatar_url ?? null,
         }))
       );
+    } else {
+      setMembers([]);
     }
     if (isAdmin) {
       try {
@@ -83,6 +100,27 @@ export default function WorkspaceMembersPage() {
   useEffect(() => {
     if (!workspace) return;
     loadAll();
+  }, [workspace, loadAll]);
+
+  // Live updates: re-fetch members + pending invites whenever the
+  // workspace_members or workspace_invitations table changes for this workspace.
+  useEffect(() => {
+    if (!workspace) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`members-${workspace.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "workspace_members", filter: `workspace_id=eq.${workspace.id}` },
+        () => { loadAll(); }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "workspace_invitations", filter: `workspace_id=eq.${workspace.id}` },
+        () => { loadAll(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [workspace, loadAll]);
 
   async function handleInvite(e: React.FormEvent) {
