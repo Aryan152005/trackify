@@ -68,8 +68,10 @@ function LoginForm() {
         return;
       }
 
-      // Success - redirect handled by middleware
-      router.push("/dashboard");
+      // Honor ?next=<path> when present so share-link → login → share-link works.
+      const nextParam = searchParams.get("next");
+      const safeNext = nextParam && nextParam.startsWith("/") ? nextParam : "/dashboard";
+      router.push(safeNext);
       router.refresh();
     } catch (error) {
       setMessage({ type: "error", text: "Network error. Please try again." });

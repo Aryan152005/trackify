@@ -43,7 +43,7 @@ export function TldrawWrapper({ initialData, onChange }: TldrawWrapperProps) {
   // Parse initialData into the Excalidraw shape. If it's tldraw legacy or empty, start fresh.
   useEffect(() => {
     if (!initialData) {
-      setParsedInitial({ elements: [], appState: {} });
+      setParsedInitial({ elements: [], appState: { collaborators: new Map() } });
       return;
     }
     try {
@@ -51,10 +51,9 @@ export function TldrawWrapper({ initialData, onChange }: TldrawWrapperProps) {
       const maybeElements = (initialData as { elements?: unknown[] }).elements;
       if (Array.isArray(maybeElements)) {
         // Excalidraw expects appState.collaborators to be a Map; JSON round-trip
-        // turns it into {} which breaks .forEach. Strip it — Excalidraw re-creates it.
+        // turns it into {} which breaks .forEach. Replace with an empty Map.
         const rawAppState = (initialData as { appState?: Record<string, unknown> }).appState ?? {};
-        const { collaborators: _ignored, ...safeAppState } = rawAppState as Record<string, unknown>;
-        void _ignored;
+        const safeAppState = { ...rawAppState, collaborators: new Map() };
         setParsedInitial({
           elements: maybeElements,
           appState: safeAppState,
@@ -62,10 +61,10 @@ export function TldrawWrapper({ initialData, onChange }: TldrawWrapperProps) {
         });
       } else {
         // Not Excalidraw format (likely legacy tldraw) — open blank
-        setParsedInitial({ elements: [], appState: {} });
+        setParsedInitial({ elements: [], appState: { collaborators: new Map() } });
       }
     } catch {
-      setParsedInitial({ elements: [], appState: {} });
+      setParsedInitial({ elements: [], appState: { collaborators: new Map() } });
     }
   }, [initialData]);
 

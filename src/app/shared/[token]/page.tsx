@@ -238,6 +238,15 @@ export default function SharedTokenPage() {
   useEffect(() => {
     async function fetchSharedContent() {
       try {
+        // Require login first — bounce to /login and return here after auth.
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          const next = encodeURIComponent(`/shared/${params.token}`);
+          router.replace(`/login?next=${next}`);
+          return;
+        }
+
         const res = await fetch(`/api/collaboration/share/${params.token}`);
         if (!res.ok) {
           const json = await res.json().catch(() => ({}));
