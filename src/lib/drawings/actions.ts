@@ -64,6 +64,7 @@ export async function saveDrawingData(
 
   if (error)
     throw new Error(`Failed to save drawing data: ${error.message}`);
+  revalidatePath(`/drawings/${drawingId}`);
   return drawing;
 }
 

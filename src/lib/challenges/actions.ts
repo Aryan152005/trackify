@@ -56,13 +56,15 @@ export async function createChallenge(args: {
   return data as Challenge;
 }
 
-export async function listChallenges(): Promise<Challenge[]> {
+export async function listChallenges(workspaceId?: string | null): Promise<Challenge[]> {
   const { supabase } = await requireUser();
-  const { data } = await supabase
+  let q = supabase
     .from("challenges")
     .select("*")
     .eq("is_archived", false)
     .order("created_at", { ascending: false });
+  if (workspaceId) q = q.eq("workspace_id", workspaceId);
+  const { data } = await q;
   return (data ?? []) as Challenge[];
 }
 

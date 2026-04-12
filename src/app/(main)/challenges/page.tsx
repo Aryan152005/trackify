@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { listChallenges } from "@/lib/challenges/actions";
 import { computeStats, currentDayIndex } from "@/lib/challenges/helpers";
+import { getActiveWorkspaceId } from "@/lib/workspace/actions";
 import type { Challenge } from "@/lib/challenges/types";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,7 +26,8 @@ export default async function ChallengesPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const challenges = await listChallenges();
+  const workspaceId = await getActiveWorkspaceId();
+  const challenges = await listChallenges(workspaceId);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">

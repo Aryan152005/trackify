@@ -15,6 +15,7 @@ import { ArrowLeft, Loader2, Trash2, Check, Cloud } from "lucide-react";
 import Link from "next/link";
 import type { Drawing } from "@/lib/types/calendar";
 import { CollaborationToolbar } from "@/components/collaboration/collaboration-toolbar";
+import { toast } from "sonner";
 
 const TldrawWrapper = dynamic(
   () =>
@@ -149,8 +150,9 @@ export default function DrawingDetailPage() {
         try {
           await saveDrawingData(drawingId, data);
           setSaveStatus("saved");
-        } catch {
+        } catch (err) {
           setSaveStatus("unsaved");
+          toast.error(err instanceof Error ? err.message : "Failed to save drawing");
         }
       }, 800);
     },

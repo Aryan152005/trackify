@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -53,6 +54,7 @@ export async function createEvent(
     .single();
 
   if (error) throw new Error(`Failed to create event: ${error.message}`);
+  revalidatePath("/calendar");
   return event;
 }
 
@@ -79,6 +81,7 @@ export async function updateEvent(
     .single();
 
   if (error) throw new Error(`Failed to update event: ${error.message}`);
+  revalidatePath("/calendar");
   return event;
 }
 
@@ -91,6 +94,7 @@ export async function deleteEvent(eventId: string) {
     .eq("id", eventId);
 
   if (error) throw new Error(`Failed to delete event: ${error.message}`);
+  revalidatePath("/calendar");
 }
 
 export async function getEvents(

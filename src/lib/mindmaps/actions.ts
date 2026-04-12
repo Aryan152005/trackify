@@ -96,6 +96,8 @@ export async function saveMindMapData(
 
   if (error)
     throw new Error(`Failed to save mind map data: ${error.message}`);
+  revalidatePath("/mindmaps");
+  revalidatePath(`/mindmaps/${mindmapId}`);
   return data;
 }
 

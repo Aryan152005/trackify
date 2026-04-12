@@ -15,6 +15,7 @@ import { ArrowLeft, Loader2, Trash2, Check, Cloud } from "lucide-react";
 import Link from "next/link";
 import type { MindMap, MindMapNode, MindMapEdge } from "@/lib/types/mindmap";
 import { CollaborationToolbar } from "@/components/collaboration/collaboration-toolbar";
+import { toast } from "sonner";
 
 const MindMapCanvas = dynamic(
   () =>
@@ -107,8 +108,9 @@ export default function MindMapDetailPage() {
           viewportRef.current
         );
         setSaveStatus("saved");
-      } catch {
+      } catch (err) {
         setSaveStatus("unsaved");
+        toast.error(err instanceof Error ? err.message : "Failed to save mind map");
       }
     }, 2000);
   }, [mindmapId]);

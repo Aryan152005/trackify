@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 import {
   format,
   addMonths,
@@ -83,8 +84,8 @@ export default function CalendarPage() {
         end.toISOString()
       );
       setEvents(data ?? []);
-    } catch {
-      // silently handle — could add toast
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to load events");
     } finally {
       setIsLoading(false);
     }
