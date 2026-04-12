@@ -50,9 +50,14 @@ export function TldrawWrapper({ initialData, onChange }: TldrawWrapperProps) {
       // Excalidraw serializes as { type, version, source, elements, appState, files }
       const maybeElements = (initialData as { elements?: unknown[] }).elements;
       if (Array.isArray(maybeElements)) {
+        // Excalidraw expects appState.collaborators to be a Map; JSON round-trip
+        // turns it into {} which breaks .forEach. Strip it — Excalidraw re-creates it.
+        const rawAppState = (initialData as { appState?: Record<string, unknown> }).appState ?? {};
+        const { collaborators: _ignored, ...safeAppState } = rawAppState as Record<string, unknown>;
+        void _ignored;
         setParsedInitial({
           elements: maybeElements,
-          appState: (initialData as { appState?: Record<string, unknown> }).appState ?? {},
+          appState: safeAppState,
           files: (initialData as { files?: Record<string, unknown> }).files ?? {},
         });
       } else {
@@ -69,12 +74,16 @@ export function TldrawWrapper({ initialData, onChange }: TldrawWrapperProps) {
       if (!onChange) return;
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
+        // Don't persist collaborators (runtime Map, serializes badly).
+        const rawAppState = (appState as Record<string, unknown>) ?? {};
+        const { collaborators: _collab, ...safeAppState } = rawAppState;
+        void _collab;
         onChange({
           type: "excalidraw",
           version: 2,
           source: "trackify",
           elements: elements as unknown[],
-          appState: appState as Record<string, unknown>,
+          appState: safeAppState,
           files: files as Record<string, unknown>,
         });
       }, 1000);
