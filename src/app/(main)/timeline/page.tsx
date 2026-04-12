@@ -17,7 +17,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { GanttChart } from "@/components/timeline/gantt-chart";
 import { RoadmapView } from "@/components/timeline/roadmap-view";
 import { TimelineView } from "@/components/timeline/timeline-view";
-import { useWorkspaceId } from "@/lib/workspace/hooks";
+import { useWorkspaceId, useWorkspace } from "@/lib/workspace/hooks";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { TaskPriority, TaskStatus } from "@/lib/types/database";
 import type { TimelineFilters } from "@/lib/timeline/types";
@@ -53,6 +54,7 @@ const PRIORITY_OPTIONS: TaskPriority[] = ["high", "medium", "low"];
 
 export default function TimelinePage() {
   const workspaceId = useWorkspaceId();
+  const { isLoading: workspaceLoading } = useWorkspace();
   const [activeTab, setActiveTab] = useState<TabId>("gantt");
   const [showFilters, setShowFilters] = useState(false);
 
@@ -95,11 +97,29 @@ export default function TimelinePage() {
     setPriorityFilter([]);
   }
 
+  if (workspaceLoading) {
+    return (
+      <AnimatedPage>
+        <div className="space-y-6">
+          <PageHeader title="Timeline" description="Loading your workspace…" />
+          <Skeleton className="h-96 w-full" />
+        </div>
+      </AnimatedPage>
+    );
+  }
+
   if (!workspaceId) {
     return (
       <AnimatedPage>
-        <div className="flex h-96 items-center justify-center text-sm text-zinc-500">
-          Select a workspace to view the timeline.
+        <div className="space-y-6">
+          <PageHeader
+            title="Timeline"
+            description="You don't have an active workspace yet. Create or join one to see your timeline."
+          />
+          <Card className="p-6 text-center text-sm text-zinc-500">
+            <p className="mb-3">No workspace selected.</p>
+            <Button onClick={() => window.location.href = "/workspace"}>Go to Workspaces</Button>
+          </Card>
         </div>
       </AnimatedPage>
     );

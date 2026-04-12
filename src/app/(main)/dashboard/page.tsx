@@ -1,11 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { format, startOfWeek, endOfWeek, subDays } from "date-fns";
+import { format, startOfWeek, endOfWeek, subDays, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { DashboardCharts } from "@/components/dashboard/dashboard-charts";
+import { DashboardCalendar } from "@/components/dashboard/dashboard-calendar";
 import { TaskList } from "@/components/dashboard/task-list";
 import { TimerWidget } from "@/components/dashboard/timer-widget";
 import { MotivationWidget } from "@/components/dashboard/motivation-widget";
@@ -61,6 +62,23 @@ export default async function DashboardPage() {
   let streakQ = supabase.from("work_entries").select("date")
     .eq("user_id", uid).order("date", { ascending: false });
 
+  // Calendar widget data: current month ± 1 (covers visible grid on either side)
+  const calStart = format(startOfMonth(subMonths(now, 1)), "yyyy-MM-dd");
+  const calEnd = format(endOfMonth(addMonths(now, 1)), "yyyy-MM-dd");
+  let calTasksQ = supabase.from("tasks")
+    .select("id, title, due_date, due_time, priority, status")
+    .eq("user_id", uid)
+    .not("due_date", "is", null)
+    .gte("due_date", calStart).lte("due_date", calEnd);
+  let calRemQ = supabase.from("reminders")
+    .select("id, title, reminder_time, is_completed")
+    .eq("user_id", uid)
+    .gte("reminder_time", calStart + "T00:00:00").lte("reminder_time", calEnd + "T23:59:59");
+  let calEntriesQ = supabase.from("work_entries")
+    .select("id, title, date, status, productivity_score")
+    .eq("user_id", uid)
+    .gte("date", calStart).lte("date", calEnd);
+
   if (workspaceId) {
     todayQ = todayQ.eq("workspace_id", workspaceId);
     weekQ = weekQ.eq("workspace_id", workspaceId);
@@ -69,11 +87,14 @@ export default async function DashboardPage() {
     motivQ = motivQ.eq("workspace_id", workspaceId);
     reminderQ = reminderQ.eq("workspace_id", workspaceId);
     streakQ = streakQ.eq("workspace_id", workspaceId);
+    calTasksQ = calTasksQ.eq("workspace_id", workspaceId);
+    calRemQ = calRemQ.eq("workspace_id", workspaceId);
+    calEntriesQ = calEntriesQ.eq("workspace_id", workspaceId);
   }
 
   // Execute all queries in parallel
-  const [todayRes, weekRes, chartRes, tasksRes, motivRes, reminderRes, streakRes] =
-    await Promise.all([todayQ, weekQ, chartQ, tasksQ, motivQ.single(), reminderQ, streakQ]);
+  const [todayRes, weekRes, chartRes, tasksRes, motivRes, reminderRes, streakRes, calTasksRes, calRemRes, calEntriesRes] =
+    await Promise.all([todayQ, weekQ, chartQ, tasksQ, motivQ.single(), reminderQ, streakQ, calTasksQ, calRemQ, calEntriesQ]);
 
   const todayEntries = todayRes.data;
   const weekEntries = weekRes.data;
@@ -179,6 +200,13 @@ export default async function DashboardPage() {
           <RecentItems />
         </CardContent>
       </Card>
+
+      {/* Calendar overview */}
+      <DashboardCalendar
+        tasks={(calTasksRes.data ?? []) as never}
+        reminders={(calRemRes.data ?? []) as never}
+        entries={(calEntriesRes.data ?? []) as never}
+      />
 
       {/* Main Content Grid */}
       <div className="grid gap-6 lg:grid-cols-3">
