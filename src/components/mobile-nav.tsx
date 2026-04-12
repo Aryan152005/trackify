@@ -152,7 +152,7 @@ export function MobileNav({ isAdmin = false }: { isAdmin?: boolean }) {
     <>
       <button
         onClick={() => setOpen(!open)}
-        className="md:hidden rounded-lg p-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+        className=" rounded-lg p-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
         aria-label="Toggle menu"
         aria-expanded={open}
       >
@@ -162,7 +162,7 @@ export function MobileNav({ isAdmin = false }: { isAdmin?: boolean }) {
       {/* Overlay */}
       <div
         className={cn(
-          "fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity duration-200 md:hidden",
+          "fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity duration-200 ",
           open ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={close}
@@ -172,7 +172,7 @@ export function MobileNav({ isAdmin = false }: { isAdmin?: boolean }) {
       {/* Drawer */}
       <div
         className={cn(
-          "fixed left-0 top-0 z-50 flex h-screen h-[100dvh] w-72 max-w-[85vw] flex-col bg-white shadow-2xl transition-transform duration-200 ease-out dark:bg-zinc-900 md:hidden",
+          "fixed left-0 top-0 z-50 flex h-screen h-[100dvh] w-72 max-w-[85vw] flex-col bg-white shadow-2xl transition-transform duration-200 ease-out dark:bg-zinc-900 ",
           open ? "translate-x-0" : "-translate-x-full"
         )}
         role="dialog"

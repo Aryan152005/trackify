@@ -2,17 +2,26 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import DOMPurify from "dompurify";
 import { Globe, Lock, FileText, ClipboardList, Columns, BookOpen } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-import { cn } from "@/lib/utils";
+import { BlockNoteReadOnly } from "@/components/shared/blocknote-readonly";
+import { createClient } from "@/lib/supabase/client";
+import Link from "next/link";
+import { Pencil } from "lucide-react";
 
 interface SharedData {
   entity: Record<string, unknown>;
   entityType: string;
   permission: "view" | "comment" | "edit";
   workspaceName?: string;
+  workspaceId?: string;
 }
+
+const ENTITY_APP_URL: Record<string, (id: string) => string> = {
+  page: (id) => `/notes/${id}`,
+  task: (id) => `/tasks/${id}`,
+  board: (id) => `/boards/${id}`,
+  entry: () => `/entries`,
+};
 
 const ENTITY_ICONS: Record<string, React.ReactNode> = {
   page: <FileText className="h-5 w-5" />,
@@ -32,32 +41,18 @@ function SharedPageContent({ entity, entityType }: { entity: Record<string, unkn
   switch (entityType) {
     case "page":
       return (
-        <div className="prose prose-zinc dark:prose-invert max-w-none">
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-            {(entity.title as string) || "Untitled"}
-          </h1>
-          {!!entity.content && (
-            <div
-              className="mt-4"
-              dangerouslySetInnerHTML={{
-                __html: DOMPurify.sanitize(entity.content as string, {
-                  ALLOWED_TAGS: [
-                    "p", "br", "strong", "em", "u", "s", "a", "ul", "ol", "li",
-                    "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "code",
-                    "pre", "img", "table", "thead", "tbody", "tr", "th", "td",
-                    "div", "span", "hr",
-                  ],
-                  ALLOWED_ATTR: ["href", "src", "alt", "class", "style", "target", "rel"],
-                  ALLOW_DATA_ATTR: false,
-                }),
-              }}
-            />
-          )}
-          {!!entity.plain_text && !entity.content && (
-            <p className="mt-4 whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
-              {entity.plain_text as string}
-            </p>
-          )}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            {!!entity.icon && (
+              <span className="text-2xl">{entity.icon as string}</span>
+            )}
+            <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+              {(entity.title as string) || "Untitled"}
+            </h1>
+          </div>
+          <div className="text-zinc-800 dark:text-zinc-200">
+            <BlockNoteReadOnly blocks={entity.content} />
+          </div>
         </div>
       );
 
@@ -147,6 +142,7 @@ export default function SharedTokenPage() {
   const [data, setData] = useState<SharedData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [canEditInApp, setCanEditInApp] = useState(false);
 
   useEffect(() => {
     async function fetchSharedContent() {
@@ -165,6 +161,27 @@ export default function SharedTokenPage() {
         }
         const json = await res.json();
         setData(json);
+
+        // If the current browser is signed in AND belongs to the workspace
+        // that owns this share link, they can edit in the full app — show
+        // an "Open full editor" button.
+        if (json.workspaceId) {
+          try {
+            const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+              const { data: membership } = await supabase
+                .from("workspace_members")
+                .select("role")
+                .eq("workspace_id", json.workspaceId)
+                .eq("user_id", user.id)
+                .maybeSingle();
+              if (membership) setCanEditInApp(true);
+            }
+          } catch {
+            /* ignore — fall back to read-only view */
+          }
+        }
       } catch {
         setError("Failed to load shared content.");
       } finally {
@@ -204,18 +221,27 @@ export default function SharedTokenPage() {
   return (
     <div className="mx-auto max-w-3xl">
       {/* Shared banner */}
-      <div className="mb-6 flex items-center gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-2.5 dark:border-indigo-900/40 dark:bg-indigo-950/20">
+      <div className="mb-6 flex flex-wrap items-center gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-2.5 dark:border-indigo-900/40 dark:bg-indigo-950/20">
         <Globe className="h-4 w-4 text-indigo-500" />
         <span className="text-sm text-indigo-700 dark:text-indigo-300">
           Shared{data.workspaceName ? ` by ${data.workspaceName}` : ""}
         </span>
-        <span className="ml-auto rounded bg-indigo-100 px-2 py-0.5 text-[11px] font-medium text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400">
+        <span className="rounded bg-indigo-100 px-2 py-0.5 text-[11px] font-medium text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400">
           {data.permission === "view"
             ? "Read only"
             : data.permission === "comment"
             ? "Can comment"
             : "Can edit"}
         </span>
+        {canEditInApp && ENTITY_APP_URL[data.entityType] && (
+          <Link
+            href={ENTITY_APP_URL[data.entityType]((data.entity.id as string) || "")}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white transition hover:bg-indigo-700"
+          >
+            <Pencil className="h-3 w-3" />
+            Open full editor
+          </Link>
+        )}
       </div>
 
       {/* Entity type indicator */}

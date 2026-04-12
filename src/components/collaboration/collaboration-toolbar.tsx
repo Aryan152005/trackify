@@ -8,6 +8,7 @@ import { PresenceAvatars } from "./presence-avatars";
 import { ShareDialog } from "./share-dialog";
 import { CommentSection } from "./comment-section";
 import { CursorOverlay } from "./cursor-overlay";
+import { NudgeButton } from "./nudge-button";
 import { useWorkspaceId } from "@/lib/workspace/hooks";
 import { getCommentCount } from "@/lib/collaboration/comments-actions";
 import { cn } from "@/lib/utils";
@@ -69,6 +70,12 @@ export function CollaborationToolbar({
 
         {/* Right: Actions */}
         <div className="flex items-center gap-1">
+          <NudgeButton
+            entityType={entityType as "page" | "task" | "board" | "entry" | "drawing" | "mindmap"}
+            entityId={entityId}
+            entityTitle={entityTitle}
+          />
+
           {showShare && (
             <Button
               variant="ghost"

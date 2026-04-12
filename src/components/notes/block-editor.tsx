@@ -16,7 +16,9 @@ interface BlockEditorProps {
 }
 
 const BUCKET = "entry-attachments"; // reused public bucket (see migration 005)
-const MAX_SIZE = 8 * 1024 * 1024; // 8MB
+// Bucket caps at 5MB (set in migration 005) and accepts jpeg/png/gif/webp/pdf.
+const MAX_SIZE = 5 * 1024 * 1024;
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
 
 export function BlockEditor({
   initialContent,
@@ -41,12 +43,18 @@ export function BlockEditor({
       toast.error(`File too large (max ${MAX_SIZE / 1024 / 1024}MB)`);
       throw new Error("File too large");
     }
+    if (file.type && !ALLOWED_TYPES.includes(file.type)) {
+      toast.error(`Unsupported file type (${file.type}). Allowed: JPEG/PNG/GIF/WebP/PDF.`);
+      throw new Error("Unsupported type");
+    }
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       toast.error("You must be signed in to upload files");
       throw new Error("Not authenticated");
     }
+    // Path MUST start with user.id — matches the RLS policy in migration 005
+    // (first folder must equal auth.uid()).
     const ext = (file.name.split(".").pop() || "bin").toLowerCase();
     const path = `${user.id}/notes/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
     const { error } = await supabase.storage.from(BUCKET).upload(path, file, {

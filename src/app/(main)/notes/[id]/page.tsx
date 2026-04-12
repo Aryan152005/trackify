@@ -5,13 +5,17 @@ import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspaceId } from "@/lib/workspace/hooks";
-import { updatePageContent, updatePageTitle, updatePageMeta, createPage } from "@/lib/notes/actions";
+import { updatePageContent, updatePageTitle, updatePageMeta, createPage, createPageFromTemplate } from "@/lib/notes/actions";
+import { toast } from "sonner";
 import { AnimatedPage } from "@/components/ui/animated-layout";
 import { PageHeader } from "@/components/notes/page-header";
 import { PageSidebar } from "@/components/notes/page-sidebar";
 import { Loader2 } from "lucide-react";
 import type { Page } from "@/lib/types/page";
 import { CollaborationToolbar } from "@/components/collaboration/collaboration-toolbar";
+import { NoteHistoryPanel } from "@/components/notes/note-history-panel";
+import { Button } from "@/components/ui/button";
+import { History } from "lucide-react";
 
 const BlockEditor = dynamic(
   () =>
@@ -42,8 +46,12 @@ export default function PageEditorPage() {
   const [sidebarPages, setSidebarPages] = useState<
     { id: string; title: string; icon: string | null; parent_page_id: string | null }[]
   >([]);
+  const [sidebarTemplates, setSidebarTemplates] = useState<
+    { id: string; title: string; icon: string | null; parent_page_id: string | null }[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
 
   // Debounce timers
@@ -80,13 +88,15 @@ export default function PageEditorPage() {
 
     const { data } = await supabase
       .from("pages")
-      .select("id, title, icon, parent_page_id")
+      .select("id, title, icon, parent_page_id, is_template")
       .eq("workspace_id", workspaceId)
       .eq("is_archived", false)
       .order("title");
 
     if (data) {
-      setSidebarPages(data);
+      // Split real pages from templates so the sidebar can render them separately
+      setSidebarPages(data.filter((p) => !p.is_template));
+      setSidebarTemplates(data.filter((p) => p.is_template));
     }
   }, [workspaceId]);
 
@@ -188,6 +198,21 @@ export default function PageEditorPage() {
     [workspaceId, router, fetchSidebarPages]
   );
 
+  const handleCreateFromTemplate = useCallback(
+    async (templateId: string) => {
+      if (!workspaceId) return;
+      try {
+        const newPage = await createPageFromTemplate(templateId, workspaceId);
+        toast.success(`Created "${newPage.title}" from template`);
+        await fetchSidebarPages();
+        router.push(`/notes/${newPage.id}`);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Couldn't create page from template");
+      }
+    },
+    [workspaceId, router, fetchSidebarPages]
+  );
+
   // ------------------------------------------------------------------
   // Render
   // ------------------------------------------------------------------
@@ -210,8 +235,10 @@ export default function PageEditorPage() {
           <div className="sticky top-24 max-h-[calc(100vh-8rem)] overflow-y-auto rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
             <PageSidebar
               pages={sidebarPages}
+              templates={sidebarTemplates}
               currentPageId={pageId}
               onCreatePage={handleCreatePage}
+              onCreateFromTemplate={handleCreateFromTemplate}
             />
           </div>
         </aside>
@@ -226,11 +253,27 @@ export default function PageEditorPage() {
             onIconChange={handleIconChange}
           />
 
-          <CollaborationToolbar
-            entityType="page"
-            entityId={pageId}
-            entityTitle={title || "Untitled"}
-            showCursors={false}
+          <div className="flex items-center gap-2">
+            <CollaborationToolbar
+              entityType="page"
+              entityId={pageId}
+              entityTitle={title || "Untitled"}
+              showCursors={false}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setHistoryOpen(true)}
+              title="See who created and edited this page"
+            >
+              <History className="mr-1.5 h-3.5 w-3.5" />
+              History
+            </Button>
+          </div>
+          <NoteHistoryPanel
+            pageId={pageId}
+            open={historyOpen}
+            onOpenChange={setHistoryOpen}
           />
 
           <div className="mt-3 rounded-xl border border-zinc-200 bg-white p-1 dark:border-zinc-800 dark:bg-zinc-900">

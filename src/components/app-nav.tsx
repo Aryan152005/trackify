@@ -110,8 +110,9 @@ export function AppNav({ isAdmin = false }: { isAdmin?: boolean }) {
           </div>
         </div>
 
-        {/* Center: primary nav — takes remaining space and scrolls if too many items */}
-        <nav className="hidden min-w-0 flex-1 items-center justify-center gap-0.5 overflow-x-auto md:flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {/* Spacer — primary nav moved entirely into the drawer for a cleaner header */}
+        <div className="flex-1" />
+        <nav className="hidden min-w-0 items-center justify-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {primaryNav.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(href + "/");
             return (

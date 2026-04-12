@@ -7,6 +7,8 @@ import {
   ChevronDown,
   FileText,
   Plus,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -24,8 +26,10 @@ interface TreeNode extends PageItem {
 
 interface PageSidebarProps {
   pages: PageItem[];
+  templates?: PageItem[];
   currentPageId?: string;
   onCreatePage: (parentId?: string) => void;
+  onCreateFromTemplate?: (templateId: string) => void | Promise<void>;
 }
 
 function buildTree(pages: PageItem[]): TreeNode[] {
@@ -140,14 +144,30 @@ function TreeItem({
 
 export function PageSidebar({
   pages,
+  templates = [],
   currentPageId,
   onCreatePage,
+  onCreateFromTemplate,
 }: PageSidebarProps) {
   const tree = useMemo(() => buildTree(pages), [pages]);
+  const [templateBusy, setTemplateBusy] = useState<string | null>(null);
 
   const handleCreateRoot = useCallback(() => {
     onCreatePage();
   }, [onCreatePage]);
+
+  const handlePickTemplate = useCallback(
+    async (templateId: string) => {
+      if (!onCreateFromTemplate || templateBusy) return;
+      setTemplateBusy(templateId);
+      try {
+        await onCreateFromTemplate(templateId);
+      } finally {
+        setTemplateBusy(null);
+      }
+    },
+    [onCreateFromTemplate, templateBusy]
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -177,6 +197,43 @@ export function PageSidebar({
         )}
       </div>
 
+      {/* Templates — click creates a new page copying the template's content */}
+      {templates.length > 0 && (
+        <div className="mt-3 border-t border-zinc-200 pt-2 dark:border-zinc-700">
+          <h2 className="mb-1 flex items-center gap-1 px-2 text-xs font-semibold uppercase tracking-wider text-indigo-500 dark:text-indigo-400">
+            <Sparkles className="h-3 w-3" />
+            Templates
+          </h2>
+          <p className="mb-1.5 px-2 text-[10px] text-zinc-500 dark:text-zinc-400">
+            Click to create a new page from a template.
+          </p>
+          <div className="space-y-0.5">
+            {templates.map((tpl) => {
+              const busy = templateBusy === tpl.id;
+              return (
+                <button
+                  key={tpl.id}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => handlePickTemplate(tpl.id)}
+                  className="group flex w-full items-center gap-2 rounded-md px-2 py-1 text-sm text-zinc-600 transition-colors hover:bg-indigo-50 hover:text-indigo-700 disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-indigo-950/40 dark:hover:text-indigo-300"
+                >
+                  {busy ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : tpl.icon ? (
+                    <span className="text-sm">{tpl.icon}</span>
+                  ) : (
+                    <FileText className="h-3.5 w-3.5 opacity-60" />
+                  )}
+                  <span className="flex-1 truncate text-left">{tpl.title || "Untitled template"}</span>
+                  <Plus className="h-3 w-3 opacity-0 transition group-hover:opacity-100" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* New page button */}
       <div className="mt-2 border-t border-zinc-200 pt-2 dark:border-zinc-700">
         <Button
@@ -186,7 +243,7 @@ export function PageSidebar({
           onClick={handleCreateRoot}
         >
           <Plus className="h-4 w-4" />
-          New Page
+          New blank page
         </Button>
       </div>
     </div>

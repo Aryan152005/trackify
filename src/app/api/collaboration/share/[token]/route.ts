@@ -73,9 +73,23 @@ export async function GET(
     );
   }
 
+  // Resolve workspace name for the "Shared by {workspace}" banner
+  let workspaceName: string | undefined;
+  if (link.workspace_id) {
+    const { data: ws } = await admin
+      .from("workspaces")
+      .select("name")
+      .eq("id", link.workspace_id)
+      .maybeSingle();
+    workspaceName = (ws?.name as string | undefined) ?? undefined;
+  }
+
+  // Return camelCase keys — the /shared/[token] page reads entityType, permission.
   return NextResponse.json({
     entity,
-    entity_type: link.entity_type,
+    entityType: link.entity_type,
     permission: link.permission,
+    workspaceName,
+    workspaceId: link.workspace_id,
   });
 }

@@ -40,6 +40,7 @@ export default async function NotesPage() {
     .select("id, title, icon, updated_at, parent_page_id")
     .eq("workspace_id", workspaceId)
     .eq("is_archived", false)
+    .eq("is_template", false)
     .order("updated_at", { ascending: false });
 
   return (

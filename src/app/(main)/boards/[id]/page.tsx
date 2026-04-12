@@ -21,6 +21,7 @@ import {
 } from "@dnd-kit/sortable";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspaceId } from "@/lib/workspace/hooks";
+import { toast } from "sonner";
 import {
   moveTask,
   addTaskToBoard,
@@ -328,6 +329,9 @@ export default function BoardDetailPage() {
         const task = await addTaskToBoard(boardId, columnId, {
           title: newTaskTitle.trim(),
         });
+        if (!task || !task.id) {
+          throw new Error("Task was not saved — server returned no id");
+        }
         setColumns((prev) =>
           prev.map((col) =>
             col.id === columnId
@@ -355,8 +359,15 @@ export default function BoardDetailPage() {
         );
         setNewTaskTitle("");
         setAddingToColumn(null);
-      } catch {
-        // keep the form open on error
+        toast.success("Task added");
+        // Re-fetch from server to make sure what we show matches what's persisted
+        await fetchBoard();
+      } catch (err) {
+        toast.error(
+          err instanceof Error
+            ? `Couldn't save task: ${err.message}`
+            : "Couldn't save task"
+        );
       } finally {
         setAddingTask(false);
       }

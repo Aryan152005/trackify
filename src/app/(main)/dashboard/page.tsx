@@ -11,6 +11,7 @@ import { TaskList } from "@/components/dashboard/task-list";
 import { TimerWidget } from "@/components/dashboard/timer-widget";
 import { MotivationWidget } from "@/components/dashboard/motivation-widget";
 import { RemindersWidget } from "@/components/dashboard/reminders-widget";
+import { TimerPill } from "@/components/timer/timer-pill";
 import { getActiveWorkspaceId } from "@/lib/workspace/actions";
 import { QuickActions } from "@/components/smart/quick-actions";
 import { RecentItems } from "@/components/smart/recent-items";
@@ -130,9 +131,12 @@ export default async function DashboardPage() {
         title={`Hey ${profile.name}, let's crush it today`}
         description="Here's what's happening in your workspace"
         actions={
-          <Link href="/entries/new">
-            <Button>+ New Entry</Button>
-          </Link>
+          <>
+            <TimerPill />
+            <Link href="/entries/new">
+              <Button>+ New Entry</Button>
+            </Link>
+          </>
         }
       />
 

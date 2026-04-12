@@ -5,7 +5,15 @@ const EVENT = "trackify:timer-change";
 
 export interface ActiveTimer {
   sessionId: string;
-  startedAt: number; // epoch ms
+  startedAt: number;      // epoch ms — adjusted forward on resume so elapsed stays correct
+  pausedAt?: number;      // epoch ms if currently paused (undefined = running)
+  title?: string;         // optional user label ("Writing proposal", etc.)
+}
+
+/** Elapsed seconds for an ActiveTimer, accounting for pause state. */
+export function computeElapsed(t: ActiveTimer, now = Date.now()): number {
+  const endpoint = t.pausedAt ?? now;
+  return Math.max(0, Math.floor((endpoint - t.startedAt) / 1000));
 }
 
 export function getActiveTimer(): ActiveTimer | null {
