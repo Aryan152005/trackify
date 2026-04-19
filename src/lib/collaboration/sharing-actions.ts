@@ -20,10 +20,12 @@ async function getAuthenticatedUser() {
 }
 
 /**
- * Map a share entity_type to its DB table name. Centralised so the privacy
- * check here and the viewer API route can't drift out of sync.
+ * Map a share entity_type to its DB table name. Kept private (not exported)
+ * because this file carries "use server" — Next.js only allows async
+ * function exports from server-action modules. The share API route keeps
+ * its own copy (routes aren't "use server" and can export plain helpers).
  */
-export function tableForEntity(entityType: string): string | null {
+function tableForEntity(entityType: string): string | null {
   const map: Record<string, string> = {
     page: "pages",
     task: "tasks",
