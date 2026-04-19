@@ -62,7 +62,7 @@ export function NoteHistoryPanel({ pageId, open, onOpenChange }: Props) {
               </Dialog.Description>
             </div>
             <Dialog.Close asChild>
-              <button className="rounded-md p-1 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800" aria-label="Close">
+              <button className="flex h-9 w-9 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800" aria-label="Close">
                 <X className="h-4 w-4" />
               </button>
             </Dialog.Close>
