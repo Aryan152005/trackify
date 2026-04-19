@@ -117,7 +117,7 @@ export default function OnboardingPage() {
 
   if (step === "name") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-purple-50 p-4 dark:from-zinc-900 dark:via-zinc-900 dark:to-zinc-800">
+      <div className="flex min-h-screen items-start justify-center bg-gradient-to-br from-indigo-50 via-white to-purple-50 p-4 py-8 sm:items-center dark:from-zinc-900 dark:via-zinc-900 dark:to-zinc-800">
         <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-8 shadow-xl dark:border-zinc-700 dark:bg-zinc-800">
           <div className="mb-6 text-center">
             <Image src="/icons/icon-192.png" alt="Trackify" width={48} height={48} className="mx-auto mb-3 rounded-xl" />
@@ -155,13 +155,13 @@ export default function OnboardingPage() {
 
   if (step === "tour") {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-purple-50 p-4 dark:from-zinc-900 dark:via-zinc-900 dark:to-zinc-800">
+      <div className="flex min-h-screen flex-col items-center justify-start bg-gradient-to-br from-indigo-50 via-white to-purple-50 p-4 py-8 sm:justify-center dark:from-zinc-900 dark:via-zinc-900 dark:to-zinc-800">
         <div className="w-full max-w-3xl">
-          <div className="mb-8 text-center">
-            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
+          <div className="mb-6 text-center sm:mb-8">
+            <h1 className="text-2xl font-bold text-zinc-900 sm:text-3xl dark:text-zinc-50">
               Here&apos;s what you can do with Trackify
             </h1>
-            <p className="mt-2 text-zinc-500">Everything you need to be productive, in one place</p>
+            <p className="mt-2 text-sm text-zinc-500 sm:text-base">Everything you need to be productive, in one place</p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -181,11 +181,11 @@ export default function OnboardingPage() {
             ))}
           </div>
 
-          <div className="mt-8 text-center">
+          <div className="mt-6 text-center sm:mt-8">
             <Button
               size="lg"
               onClick={() => router.push("/dashboard?tour=1")}
-              className="gap-2 px-8"
+              className="w-full gap-2 px-8 sm:w-auto"
             >
               Start the tour
               <ArrowRight className="h-4 w-4" />

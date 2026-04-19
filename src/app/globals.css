@@ -66,13 +66,21 @@ html {
   }
 }
 
-/* PWA standalone mode - safe area handling */
-@supports (padding: env(safe-area-inset-top)) {
-  body {
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
+/* PWA standalone mode - safe area handling.
+ * Gated on display-mode: standalone so plain mobile Safari (which also
+ * supports env() but keeps its own status/nav bars) does NOT get ~80px
+ * of extra body padding. Without this gate, min-h-screen layouts on the
+ * landing page had their centered content clipped off the bottom of the
+ * visible viewport.
+ */
+@media (display-mode: standalone) {
+  @supports (padding: env(safe-area-inset-top)) {
+    body {
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+    }
   }
 }
 

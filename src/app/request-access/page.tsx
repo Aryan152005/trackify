@@ -36,7 +36,7 @@ export default function RequestAccessPage() {
 
   if (submitted) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-purple-50 p-4 dark:from-zinc-900 dark:via-zinc-900 dark:to-zinc-800">
+      <div className="flex min-h-screen items-start justify-center bg-gradient-to-br from-indigo-50 via-white to-purple-50 p-4 py-8 sm:items-center dark:from-zinc-900 dark:via-zinc-900 dark:to-zinc-800">
         <div className="w-full max-w-md text-center">
           <CheckCircle className="mx-auto mb-4 h-12 w-12 text-green-500" />
           <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">Request submitted!</h2>

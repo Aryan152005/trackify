@@ -67,7 +67,7 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-purple-50 px-4 dark:from-zinc-900 dark:via-zinc-800">
+    <div className="flex min-h-screen flex-col items-center justify-start bg-gradient-to-br from-indigo-50 via-white to-purple-50 px-4 py-8 sm:justify-center dark:from-zinc-900 dark:via-zinc-800">
       <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-8 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
         <h1 className="mb-2 text-2xl font-bold text-zinc-900 dark:text-zinc-50">Join Trackify</h1>
         <p className="mb-6 text-sm text-zinc-600 dark:text-zinc-400">
