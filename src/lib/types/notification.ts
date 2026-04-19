@@ -4,7 +4,8 @@ export type NotificationType =
   | "reminder"
   | "request"
   | "nudge"
-  | "comment";
+  | "comment"
+  | "broadcast";
 
 export type RequestType =
   | "task"

@@ -15,6 +15,7 @@ import {
   Heart,
   Sparkles,
   Loader2,
+  Moon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 import { broadcastPush, type PushRecipient } from "@/lib/admin/push-actions";
 
-type Target = "all" | "selected";
+type Target = "all" | "selected" | "inactive_24h";
 
 interface TonePreset {
   id: "announcement" | "reminder" | "urgent" | "friendly" | "praise";
@@ -106,6 +107,22 @@ export function PushComposer({ recipients }: PushComposerProps) {
   const selectedCount = selected.size;
   const selectedWithPush = recipients.filter((r) => selected.has(r.user_id) && r.has_push).length;
 
+  // Inactive-24h = no last_activity_at OR last activity older than 24h.
+  // Computed client-side against the recipients snapshot so the admin
+  // sees the deliverable count live while picking a target.
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const inactiveIds = recipients
+    .filter((r) => {
+      if (!r.last_active_at) return true;
+      return now - new Date(r.last_active_at).getTime() > DAY_MS;
+    })
+    .map((r) => r.user_id);
+  const inactiveTotal = inactiveIds.length;
+  const inactiveWithPush = recipients.filter(
+    (r) => inactiveIds.includes(r.user_id) && r.has_push,
+  ).length;
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return recipients;
@@ -118,7 +135,21 @@ export function PushComposer({ recipients }: PushComposerProps) {
 
   // How many pushes this send will actually attempt. Zero disables the
   // Send button so an admin can't fire a broadcast that reaches nobody.
-  const willAttempt = target === "all" ? withPush : selectedWithPush;
+  // Note: in-app notifications are created for every targeted user
+  // regardless of push status, so the broadcast is not "wasted" even
+  // if willAttempt is 0 — they just won't get an OS push.
+  const willAttempt =
+    target === "all"
+      ? withPush
+      : target === "inactive_24h"
+        ? inactiveWithPush
+        : selectedWithPush;
+  const willNotify =
+    target === "all"
+      ? recipients.length
+      : target === "inactive_24h"
+        ? inactiveTotal
+        : selectedCount;
 
   function applyTone(preset: TonePreset) {
     setTonePicked(preset.id);
@@ -154,11 +185,13 @@ export function PushComposer({ recipients }: PushComposerProps) {
       toast.error("Please enter a title.");
       return;
     }
-    if (willAttempt === 0) {
+    if (willNotify === 0) {
       toast.error(
-        target === "all"
-          ? "No users have push enabled yet."
-          : "None of the selected users have push enabled.",
+        target === "inactive_24h"
+          ? "Nobody's been inactive for 24h+ yet."
+          : target === "all"
+            ? "No users to send to."
+            : "Please pick at least one user.",
       );
       return;
     }
@@ -177,15 +210,15 @@ export function PushComposer({ recipients }: PushComposerProps) {
           url: url.trim() || undefined,
         });
         if (result.targeted === 0) {
-          toast.warning("No recipients with push enabled — nothing sent.");
+          toast.warning("No recipients matched — nothing sent.");
           return;
         }
         const extras: string[] = [];
-        if (result.failed > 0) extras.push(`${result.failed} failed`);
+        if (result.failed > 0) extras.push(`${result.failed} push failed`);
         if (result.removed > 0) extras.push(`${result.removed} dead devices cleaned`);
         const suffix = extras.length ? ` (${extras.join(", ")})` : "";
         toast.success(
-          `Delivered ${result.sent} push${result.sent === 1 ? "" : "es"} to ${result.targeted} user${result.targeted === 1 ? "" : "s"}${suffix}`,
+          `Notified ${result.targeted} user${result.targeted === 1 ? "" : "s"} in-app · ${result.sent} OS push${result.sent === 1 ? "" : "es"} delivered${suffix}`,
         );
         // Clear the composer so the admin doesn't accidentally re-send.
         setTitle("");
@@ -214,13 +247,24 @@ export function PushComposer({ recipients }: PushComposerProps) {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <TargetButton
                   active={target === "all"}
                   onClick={() => setTarget("all")}
                   icon={<Users className="h-3.5 w-3.5" />}
                   label="Everyone"
                   sub={`${withPush} with push`}
+                />
+                <TargetButton
+                  active={target === "inactive_24h"}
+                  onClick={() => setTarget("inactive_24h")}
+                  icon={<Moon className="h-3.5 w-3.5" />}
+                  label="Inactive 24h+"
+                  sub={
+                    inactiveTotal === 0
+                      ? "none"
+                      : `${inactiveWithPush}/${inactiveTotal} deliverable`
+                  }
                 />
                 <TargetButton
                   active={target === "selected"}
@@ -405,20 +449,28 @@ export function PushComposer({ recipients }: PushComposerProps) {
 
           <Card>
             <CardContent className="space-y-3 p-4">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-zinc-500 dark:text-zinc-400">Will attempt to deliver</span>
-                <span className="font-semibold text-zinc-900 dark:text-zinc-50">
-                  {willAttempt} push{willAttempt === 1 ? "" : "es"}
-                </span>
+              <div className="space-y-1 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-500 dark:text-zinc-400">In-app notification</span>
+                  <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+                    {willNotify} user{willNotify === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-500 dark:text-zinc-400">OS push</span>
+                  <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+                    {willAttempt} of {willNotify}
+                  </span>
+                </div>
               </div>
-              {target === "selected" && selectedCount > selectedWithPush && (
+              {willNotify > willAttempt && (
                 <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                  {selectedCount - selectedWithPush} picked user{selectedCount - selectedWithPush === 1 ? "" : "s"} will be skipped — no push enabled.
+                  {willNotify - willAttempt} user{willNotify - willAttempt === 1 ? "" : "s"} will see an in-app notification only — no device push subscription.
                 </p>
               )}
               <Button
                 onClick={handleSendClick}
-                disabled={!title.trim() || willAttempt === 0 || pending}
+                disabled={!title.trim() || willNotify === 0 || pending}
                 className="w-full gap-2"
                 size="lg"
               >
@@ -427,10 +479,10 @@ export function PushComposer({ recipients }: PushComposerProps) {
                 ) : (
                   <Send className="h-4 w-4" />
                 )}
-                {pending ? "Sending…" : `Send to ${willAttempt} user${willAttempt === 1 ? "" : "s"}`}
+                {pending ? "Sending…" : `Send to ${willNotify} user${willNotify === 1 ? "" : "s"}`}
               </Button>
               <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
-                A system log is written for every broadcast. Dead subscriptions (uninstalled apps / revoked permissions) are cleaned automatically.
+                Every send creates an in-app notification + a system log row. Dead push subscriptions are cleaned automatically. Users can react + reply from their notification panel.
               </p>
             </CardContent>
           </Card>
@@ -440,13 +492,15 @@ export function PushComposer({ recipients }: PushComposerProps) {
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
-        title={`Send push to ${willAttempt} user${willAttempt === 1 ? "" : "s"}?`}
+        title={`Broadcast to ${willNotify} user${willNotify === 1 ? "" : "s"}?`}
         description={
           target === "all"
-            ? `Every user with push enabled (${withPush}) will receive this notification on all their subscribed devices.`
-            : `${selectedWithPush} of the ${selectedCount} picked users will receive this. This cannot be unsent.`
+            ? `Every user (${recipients.length}) will see this in their notification panel; ${withPush} of them will also receive an OS push. Users can react or reply.`
+            : target === "inactive_24h"
+              ? `${inactiveTotal} users haven't been active in 24h+ — all will get an in-app notification, ${inactiveWithPush} will also get an OS push. Reactions + replies are enabled.`
+              : `${selectedCount} picked user${selectedCount === 1 ? "" : "s"} will receive this in the notification panel; ${selectedWithPush} will also get an OS push. Reactions + replies enabled.`
         }
-        confirmLabel="Send"
+        confirmLabel="Send broadcast"
         cancelLabel="Keep editing"
         onConfirm={performSend}
       />

@@ -67,10 +67,11 @@ const TYPE_FILTER_OPTIONS: Array<{ id: TypeFilter; label: string }> = [
 const TYPE_PRIORITY: Record<NotificationType, number> = {
   mention: 0,
   assignment: 1,
-  request: 2,
-  reminder: 3,
-  comment: 4,
-  nudge: 5,
+  broadcast: 2,
+  request: 3,
+  reminder: 4,
+  comment: 5,
+  nudge: 6,
 };
 
 export default function NotificationsPage() {
@@ -94,11 +95,14 @@ export default function NotificationsPage() {
   const fetchNotifications = useCallback(async () => {
     if (!userId || !workspaceId) return;
     const supabase = createClient();
+    // workspace_id IS NULL = platform-wide admin broadcast (migration 040).
+    // Include those alongside the user's current-workspace notifications so
+    // admin blasts surface regardless of which workspace is active.
     const { data } = await supabase
       .from("notifications")
       .select("*")
       .eq("user_id", userId)
-      .eq("workspace_id", workspaceId)
+      .or(`workspace_id.eq.${workspaceId},workspace_id.is.null`)
       .order("created_at", { ascending: false });
     if (data) setNotifications(data as Notification[]);
     setLoading(false);
@@ -114,7 +118,8 @@ export default function NotificationsPage() {
     enabled: !!userId && !!workspaceId,
     onInsert(payload) {
       const n = payload.new as unknown as Notification;
-      if (n.workspace_id !== workspaceId) return;
+      // Accept current workspace OR platform-wide (NULL workspace = admin broadcast).
+      if (n.workspace_id !== null && n.workspace_id !== workspaceId) return;
       setNotifications((prev) => [n, ...prev]);
     },
     onUpdate(payload) {

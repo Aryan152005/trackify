@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Bell,
   ClipboardList,
@@ -10,12 +11,14 @@ import {
   Megaphone,
   Check,
   Trash2,
+  Send as SendIcon,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Notification, NotificationType } from "@/lib/types/notification";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { BroadcastThreadPanel } from "@/components/notifications/broadcast-thread-panel";
 
 const typeIcons: Record<NotificationType, React.ReactNode> = {
   mention: <AtSign className="h-5 w-5 text-purple-500" />,
@@ -24,6 +27,7 @@ const typeIcons: Record<NotificationType, React.ReactNode> = {
   request: <FileText className="h-5 w-5 text-amber-500" />,
   nudge: <Megaphone className="h-5 w-5 text-pink-500" />,
   comment: <MessageSquare className="h-5 w-5 text-sky-500" />,
+  broadcast: <SendIcon className="h-5 w-5 text-emerald-500" />,
 };
 
 /**
@@ -38,6 +42,7 @@ const unreadAccent: Record<NotificationType, string> = {
   request: "border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/15",
   comment: "border-l-sky-500 bg-sky-50/40 dark:bg-sky-950/15",
   nudge: "border-l-pink-500 bg-pink-50/40 dark:bg-pink-950/15",
+  broadcast: "border-l-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/15",
 };
 
 interface NotificationListProps {
@@ -51,6 +56,10 @@ export function NotificationList({
   onMarkRead,
   onDelete,
 }: NotificationListProps) {
+  // Broadcast rows can open an inline thread (reactions + comments). Keep
+  // it collapsible so the notifications page doesn't blow up vertically
+  // when a user has 10+ broadcasts.
+  const [expandedBroadcast, setExpandedBroadcast] = useState<string | null>(null);
   if (notifications.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-2xl border border-zinc-200 bg-white py-16 dark:border-zinc-800 dark:bg-zinc-900">
@@ -68,7 +77,10 @@ export function NotificationList({
   return (
     <div className="divide-y divide-zinc-200 rounded-2xl border border-zinc-200 bg-white overflow-hidden dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
       <AnimatePresence initial={false}>
-        {notifications.map((n) => (
+        {notifications.map((n) => {
+          const isBroadcast = n.type === "broadcast" && n.entity_id;
+          const threadOpen = isBroadcast && expandedBroadcast === n.entity_id;
+          return (
           <motion.div
             key={n.id}
             initial={{ opacity: 0, height: 0 }}
@@ -147,8 +159,36 @@ export function NotificationList({
                 </Button>
               </div>
             </div>
+
+            {/* Broadcast extras — inline reactions + comments thread.
+                Only rendered for type='broadcast' rows; clicking the
+                row (or the "View thread" button) expands it inline. */}
+            {isBroadcast && n.entity_id && (
+              <div className="border-t border-zinc-100 bg-zinc-50/60 px-4 py-2 dark:border-zinc-800 dark:bg-zinc-900/40">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between text-[11px] font-medium text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                  onClick={() => {
+                    setExpandedBroadcast(threadOpen ? null : (n.entity_id as string));
+                    if (!n.is_read) onMarkRead(n.id);
+                  }}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <MessageSquare className="h-3 w-3" />
+                    {threadOpen ? "Hide" : "React or reply"}
+                  </span>
+                  <span className="text-zinc-400">{threadOpen ? "▴" : "▾"}</span>
+                </button>
+                {threadOpen && (
+                  <div className="mt-2">
+                    <BroadcastThreadPanel broadcastId={n.entity_id} />
+                  </div>
+                )}
+              </div>
+            )}
           </motion.div>
-        ))}
+          );
+        })}
       </AnimatePresence>
     </div>
   );

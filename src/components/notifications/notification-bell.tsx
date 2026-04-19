@@ -28,6 +28,7 @@ const typeIcons: Record<NotificationType, React.ReactNode> = {
   request: <FileText className="h-4 w-4 text-amber-500" />,
   nudge: <Megaphone className="h-4 w-4 text-pink-500" />,
   comment: <MessageSquare className="h-4 w-4 text-sky-500" />,
+  broadcast: <Megaphone className="h-4 w-4 text-emerald-500" />,
 };
 
 function getEntityHref(notification: Notification): string | null {
