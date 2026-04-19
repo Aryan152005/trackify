@@ -7,7 +7,7 @@ import { AdminTabs } from "@/components/admin/admin-tabs";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Activity } from "lucide-react";
+import { Activity, Send } from "lucide-react";
 import { format } from "date-fns";
 
 export default async function AdminDashboard() {
@@ -46,6 +46,12 @@ export default async function AdminDashboard() {
         description="Manage users, whitelist, emails, and monitor platform health"
         actions={
           <>
+            <Link href="/admin/push">
+              <Button variant="outline" size="sm">
+                <Send className="mr-1.5 h-4 w-4" />
+                Send Push
+              </Button>
+            </Link>
             <Link href="/admin/logs">
               <Button variant="outline" size="sm">
                 <Activity className="mr-1.5 h-4 w-4" />
