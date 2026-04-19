@@ -137,6 +137,84 @@ export async function createReminderForTask(
   return { id: data.id as string };
 }
 
+/**
+ * Archive a stale task by marking it "cancelled" — preserves the record
+ * for audit while clearing it from active lists and the smart mindmap.
+ * (We intentionally don't hard-delete; the user can reopen if they change
+ * their mind.)
+ */
+export async function archiveStaleTask(taskId: string) {
+  const { supabase, user } = await requireUser();
+
+  const { data: existing } = await supabase
+    .from("tasks")
+    .select("id, workspace_id, title, status")
+    .eq("id", taskId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!existing) throw new Error("Task not found or you don't have access");
+
+  const { error } = await supabase
+    .from("tasks")
+    .update({ status: "cancelled" })
+    .eq("id", taskId);
+  if (error) throw new Error(error.message);
+
+  await logEvent({
+    service: "other",
+    level: "info",
+    tag: "smart.archiveStale",
+    message: `Archived stale task "${existing.title}"`,
+    metadata: { taskId, previousStatus: existing.status },
+    userId: user.id,
+  });
+
+  revalidatePath("/mindmaps");
+  revalidatePath("/tasks");
+}
+
+/**
+ * Bulk-complete every overdue reminder for the caller in one shot.
+ * The server does the authorization + per-row update so the client only
+ * needs to say "make it so".
+ */
+export async function batchCompleteOverdueReminders(reminderIds: string[]) {
+  if (reminderIds.length === 0) return { completed: 0 };
+  const { supabase, user } = await requireUser();
+  const now = new Date().toISOString();
+
+  const { error, count } = await supabase
+    .from("reminders")
+    .update({ is_completed: true, completed_at: now }, { count: "exact" })
+    .eq("user_id", user.id)
+    .in("id", reminderIds);
+
+  if (error) {
+    await logEvent({
+      service: "other",
+      level: "error",
+      tag: "smart.batchCompleteOverdue",
+      message: `Batch complete failed: ${error.message}`,
+      metadata: { reminderIds, code: error.code },
+      userId: user.id,
+    });
+    throw new Error(error.message);
+  }
+
+  await logEvent({
+    service: "other",
+    level: "info",
+    tag: "smart.batchCompleteOverdue",
+    message: `Batch-completed ${count ?? 0} overdue reminders`,
+    metadata: { reminderIds, completed: count },
+    userId: user.id,
+  });
+
+  revalidatePath("/mindmaps");
+  revalidatePath("/reminders");
+  return { completed: count ?? 0 };
+}
+
 /** Create a work entry prefilled from a task. */
 export async function createEntryForTask(
   taskId: string,

@@ -54,7 +54,9 @@ export type SuggestionKind =
   | "set-due-from-reminder"
   | "complete-overdue-reminder"
   | "create-reminder-from-task"
-  | "create-entry-for-task";
+  | "create-entry-for-task"
+  | "archive-stale-task"
+  | "batch-complete-overdue";
 
 export interface Suggestion {
   id: string;
@@ -67,12 +69,30 @@ export interface Suggestion {
   prefillTitle?: string;
   prefillDate?: string | null;
   prefillTime?: string | null;
+  /** Urgency score used to sort the sidebar — higher = shown first. */
+  priority?: number;
+  /** For batch-* kinds: the set of ids this single action will affect. */
+  batchIds?: string[];
+}
+
+/**
+ * Counts + health signal displayed in the overview bar at the top of the
+ * smart mindmap section. Pre-computed server-side so the client doesn't
+ * have to re-iterate nodes for every render.
+ */
+export interface GraphOverview {
+  totals: { task: number; reminder: number; entry: number; page: number };
+  overdueTasks: number;
+  overdueReminders: number;
+  dueThisWeek: number;
+  staleTasks: number;
 }
 
 export interface SmartGraph {
   nodes: SmartNode[];
   edges: SmartEdge[];
   suggestions: Suggestion[];
+  overview: GraphOverview;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -90,7 +110,7 @@ const KEYWORD_MIN_SCORE = 0.12;
 export async function buildSmartGraph(workspaceId: string | null): Promise<SmartGraph> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { nodes: [], edges: [], suggestions: [] };
+  if (!user) return { nodes: [], edges: [], suggestions: [], overview: emptyOverview() };
 
   const now = new Date();
   const lookback = new Date(now.getTime() - ENTRY_LOOKBACK_DAYS * 24 * 3600 * 1000);
@@ -514,5 +534,96 @@ export async function buildSmartGraph(workspaceId: string | null): Promise<Smart
     });
   });
 
-  return { nodes: finalNodes, edges, suggestions: suggestions.slice(0, 10) };
+  // ── 5) Dead-task detection: pending tasks untouched for 14+ days with
+  //      no due date — surface an "archive or act" prompt. Avoids clutter
+  //      from tasks that have been abandoned without being explicitly closed.
+  const staleCutoff = new Date(now.getTime() - 14 * 24 * 3600 * 1000);
+  (tasks ?? []).forEach((t) => {
+    if (t.status !== "pending") return;
+    if (t.due_date) return; // has a due date → still active plan
+    const lastTouched = t.updated_at ? new Date(t.updated_at as string) : null;
+    if (!lastTouched || lastTouched >= staleCutoff) return;
+    const days = Math.floor((now.getTime() - lastTouched.getTime()) / (24 * 3600 * 1000));
+    suggestions.push({
+      id: `sugg-stale-${t.id}`,
+      kind: "archive-stale-task",
+      title: `Still on your plate: "${t.title}"`,
+      detail: `No edits for ${days} day${days === 1 ? "" : "s"} and no due date — act on it or mark done to clear it.`,
+      taskId: t.id as string,
+    });
+  });
+
+  // ── 6) Batch: if ≥3 overdue reminders, collapse them into a single
+  //      "complete all" suggestion. Keeps the sidebar scannable.
+  const overdueReminderIds = (reminders ?? [])
+    .filter((r) => r.reminder_time && new Date(r.reminder_time as string) < now && !r.is_completed)
+    .map((r) => r.id as string);
+  if (overdueReminderIds.length >= 3) {
+    // Remove the individual overdue-reminder suggestions — the batch replaces them.
+    const overdueSet = new Set(overdueReminderIds);
+    for (let i = suggestions.length - 1; i >= 0; i--) {
+      const s = suggestions[i];
+      if (s.kind === "complete-overdue-reminder" && s.reminderId && overdueSet.has(s.reminderId)) {
+        suggestions.splice(i, 1);
+      }
+    }
+    suggestions.unshift({
+      id: `sugg-batch-overdue`,
+      kind: "batch-complete-overdue",
+      title: `Clear ${overdueReminderIds.length} overdue reminders`,
+      detail: `All were scheduled in the past and are still open. Mark all complete in one click.`,
+      batchIds: overdueReminderIds,
+    });
+  }
+
+  // ── 7) Priority ranking — urgent items surface first, dead tasks last.
+  const KIND_PRIORITY: Record<SuggestionKind, number> = {
+    "batch-complete-overdue": 100,
+    "complete-overdue-reminder": 90,
+    "set-due-from-reminder": 70,
+    "create-reminder-from-task": 60,
+    "create-entry-for-task": 40,
+    "archive-stale-task": 20,
+  };
+  for (const s of suggestions) s.priority = KIND_PRIORITY[s.kind] ?? 0;
+  suggestions.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
+
+  // ── Build overview pre-aggregated so the client doesn't re-iterate. ──
+  const overview: GraphOverview = {
+    totals: {
+      task: finalNodes.filter((n) => n.kind === "task").length,
+      reminder: finalNodes.filter((n) => n.kind === "reminder").length,
+      entry: finalNodes.filter((n) => n.kind === "entry").length,
+      page: finalNodes.filter((n) => n.kind === "page").length,
+    },
+    overdueTasks: finalNodes.filter((n) => n.kind === "task" && n.is_overdue).length,
+    overdueReminders: finalNodes.filter((n) => n.kind === "reminder" && n.is_overdue).length,
+    dueThisWeek: (() => {
+      const weekEnd = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
+      return finalNodes.filter((n) => {
+        const d = n.due_date ?? n.reminder_time;
+        if (!d) return false;
+        const dt = new Date(d);
+        return dt >= now && dt <= weekEnd;
+      }).length;
+    })(),
+    staleTasks: suggestions.filter((s) => s.kind === "archive-stale-task").length,
+  };
+
+  return {
+    nodes: finalNodes,
+    edges,
+    suggestions: suggestions.slice(0, 12),
+    overview,
+  };
+}
+
+function emptyOverview(): GraphOverview {
+  return {
+    totals: { task: 0, reminder: 0, entry: 0, page: 0 },
+    overdueTasks: 0,
+    overdueReminders: 0,
+    dueThisWeek: 0,
+    staleTasks: 0,
+  };
 }

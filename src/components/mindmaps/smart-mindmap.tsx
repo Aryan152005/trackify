@@ -29,6 +29,8 @@ import {
   completeReminder,
   createReminderForTask,
   createEntryForTask,
+  archiveStaleTask,
+  batchCompleteOverdueReminders,
 } from "@/lib/smart-mindmap/actions";
 
 // ─── Visual config ──────────────────────────────────────────────
@@ -54,9 +56,17 @@ const KIND_HREF: Record<EntityKind, (rawId: string) => string> = {
 function SmartNodeCard({ data }: NodeProps<SmartNode>) {
   const style = KIND_STYLES[data.kind];
   const Icon = style.icon;
+  // Node accent override — set by the parent when a non-default color mode
+  // is active. We read the CSS variable off the closest ancestor with it
+  // defined (the ReactFlow-wrapped node element).
+  // Using CSS var means the tailwind classes stay stable; the var just
+  // paints the border when present.
   return (
     <div
       className={`group relative min-w-[160px] max-w-[220px] rounded-lg border-2 ${style.border} ${style.bg} px-3 py-2 shadow-sm transition hover:shadow-md`}
+      style={{
+        borderColor: "var(--node-accent, undefined)",
+      }}
     >
       <Handle type="target" position={Position.Top} className="!bg-zinc-400" />
       <div className={`flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide ${style.text}`}>
@@ -223,6 +233,21 @@ export function SmartMindMap({ graph, workspaceId }: Props) {
   // means "no filter" so typing is additive, not destructive.
   const [search, setSearch] = useState("");
 
+  // Recolor-by: default is "kind" (task=indigo, reminder=amber, etc).
+  // Switching to another axis reveals a different structure — e.g. "urgency"
+  // reddens overdue items, "board" groups tasks on the same kanban.
+  type ColorMode = "kind" | "urgency" | "status" | "priority";
+  const [colorMode, setColorMode] = useState<ColorMode>("kind");
+
+  // Edge under the pointer — used to show a "why this edge" tooltip with
+  // the precomputed reason (see graph.ts). Clean custom tooltip beats the
+  // native <title> one which flashes slow and can't be styled.
+  const [hoverEdge, setHoverEdge] = useState<{
+    reason: string;
+    x: number;
+    y: number;
+  } | null>(null);
+
   // Pre-compute window bounds once per dateWindow change.
   const windowBounds = useMemo(() => {
     if (dateWindow === "all") return null;
@@ -291,14 +316,60 @@ export function SmartMindMap({ graph, workspaceId }: Props) {
     return () => { cancelled = true; };
   }, [visibleNodes, visibleEdges]);
 
+  // Colour override per node based on the selected axis. Applied as an
+  // inline CSS variable that the SmartNodeCard reads, falling back to the
+  // default kind-based style when colorMode === "kind".
+  const nodeColorFor = (n: SmartNode): string | null => {
+    if (colorMode === "kind") return null;
+    if (colorMode === "urgency") {
+      if (n.is_overdue) return "#ef4444"; // red
+      const d = n.due_date ?? n.reminder_time;
+      if (d) {
+        const days = (new Date(d).getTime() - Date.now()) / (24 * 3600 * 1000);
+        if (days <= 1) return "#f59e0b"; // amber — due within a day
+        if (days <= 7) return "#eab308"; // yellow — this week
+      }
+      return "#71717a"; // zinc — no urgency
+    }
+    if (colorMode === "status") {
+      if (n.status === "done") return "#10b981";
+      if (n.status === "in-progress") return "#6366f1";
+      if (n.status === "blocked") return "#ef4444";
+      return "#a1a1aa";
+    }
+    if (colorMode === "priority") {
+      // Tasks only — non-task nodes get a muted neutral so the mode still
+      // reads cleanly when mixed entities are visible.
+      const n2 = n as SmartNode & { priority?: string };
+      if (n.kind !== "task") return "#a1a1aa";
+      if (n2.priority === "high") return "#ef4444";
+      if (n2.priority === "medium") return "#f59e0b";
+      return "#10b981";
+    }
+    return null;
+  };
+
   const rfNodes = useMemo(() => {
-    if (!hoverId) return laidNodes;
-    const highlighted = new Set([hoverId, ...(neighbours.get(hoverId) ?? [])]);
-    return laidNodes.map((n) => ({
-      ...n,
-      style: { opacity: highlighted.has(n.id) ? 1 : 0.25, transition: "opacity 150ms" },
-    }));
-  }, [laidNodes, hoverId, neighbours]);
+    const highlighted = hoverId
+      ? new Set([hoverId, ...(neighbours.get(hoverId) ?? [])])
+      : null;
+    return laidNodes.map((n) => {
+      const data = n.data as SmartNode;
+      const override = nodeColorFor(data);
+      const style: React.CSSProperties = {
+        transition: "opacity 150ms",
+      };
+      if (highlighted) {
+        style.opacity = highlighted.has(n.id) ? 1 : 0.25;
+      }
+      // Stamp the CSS variable the node card reads for border + accent.
+      if (override) {
+        (style as Record<string, string>)["--node-accent"] = override;
+      }
+      return { ...n, style };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [laidNodes, hoverId, neighbours, colorMode]);
 
   const rfEdges = useMemo(() => {
     const mapped = mapEdges(visibleEdges);
@@ -361,7 +432,51 @@ export function SmartMindMap({ graph, workspaceId }: Props) {
     <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
       {/* Canvas */}
       <Card className="overflow-hidden">
-        <div className="h-[600px] w-full">
+        {/* Overview bar — quick health signal at a glance. */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200 px-3 py-2 text-[11px] dark:border-zinc-800">
+          <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 font-medium text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+            {graph.overview.totals.task} tasks
+          </span>
+          {graph.overview.overdueTasks > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 font-medium text-red-700 dark:bg-red-950/30 dark:text-red-300">
+              <AlertTriangle className="h-2.5 w-2.5" />
+              {graph.overview.overdueTasks} overdue
+            </span>
+          )}
+          {graph.overview.dueThisWeek > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+              {graph.overview.dueThisWeek} due this week
+            </span>
+          )}
+          {graph.overview.overdueReminders > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 font-medium text-red-700 dark:bg-red-950/30 dark:text-red-300">
+              {graph.overview.overdueReminders} overdue reminders
+            </span>
+          )}
+          {graph.overview.staleTasks > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+              {graph.overview.staleTasks} stale
+            </span>
+          )}
+
+          {/* Color-by selector — pushed to the right. */}
+          <div className="ml-auto flex items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-wide text-zinc-400">Color by</span>
+            <select
+              value={colorMode}
+              onChange={(e) => setColorMode(e.target.value as typeof colorMode)}
+              className="rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-[11px] text-zinc-700 focus:outline-none focus:ring-1 focus:ring-indigo-500/30 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+              aria-label="Recolor nodes by"
+            >
+              <option value="kind">Kind</option>
+              <option value="urgency">Urgency</option>
+              <option value="status">Status</option>
+              <option value="priority">Priority</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="relative h-[600px] w-full">
           <ReactFlowProvider>
             <ReactFlow
               nodes={rfNodes}
@@ -372,7 +487,19 @@ export function SmartMindMap({ graph, workspaceId }: Props) {
               onNodeClick={onNodeClick}
               onNodeMouseEnter={(_, n) => setHoverId(n.id)}
               onNodeMouseLeave={() => setHoverId(null)}
-              onPaneClick={() => setHoverId(null)}
+              onEdgeMouseEnter={(e, edge) => {
+                const reason = (edge.data as { reason?: string } | undefined)?.reason ?? "";
+                if (!reason) return;
+                setHoverEdge({ reason, x: e.clientX, y: e.clientY });
+              }}
+              onEdgeMouseMove={(e) => {
+                setHoverEdge((prev) => (prev ? { ...prev, x: e.clientX, y: e.clientY } : null));
+              }}
+              onEdgeMouseLeave={() => setHoverEdge(null)}
+              onPaneClick={() => {
+                setHoverId(null);
+                setHoverEdge(null);
+              }}
               proOptions={{ hideAttribution: true }}
               minZoom={0.2}
               maxZoom={2}
@@ -384,6 +511,17 @@ export function SmartMindMap({ graph, workspaceId }: Props) {
               <Controls showInteractive={false} />
             </ReactFlow>
           </ReactFlowProvider>
+
+          {/* Edge hover tooltip — floats near the cursor, shows the
+              "why this edge" reason pre-computed in graph.ts. */}
+          {hoverEdge && (
+            <div
+              className="pointer-events-none fixed z-50 max-w-xs rounded-md bg-zinc-900 px-2.5 py-1.5 text-[11px] font-medium text-white shadow-lg dark:bg-zinc-700"
+              style={{ left: hoverEdge.x + 12, top: hoverEdge.y + 12 }}
+            >
+              {hoverEdge.reason}
+            </div>
+          )}
         </div>
         <div className="border-t border-zinc-200 px-3 py-2 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
           <div className="flex flex-wrap items-center gap-3">
@@ -681,6 +819,16 @@ function SuggestionActions({
                   );
                 }
                 break;
+              case "archive-stale-task":
+                if (suggestion.taskId) {
+                  await archiveStaleTask(suggestion.taskId);
+                }
+                break;
+              case "batch-complete-overdue":
+                if (suggestion.batchIds && suggestion.batchIds.length > 0) {
+                  await batchCompleteOverdueReminders(suggestion.batchIds);
+                }
+                break;
             }
           });
         }}
@@ -707,6 +855,9 @@ function actionLabel(s: Suggestion): string {
     case "complete-overdue-reminder": return "Mark complete";
     case "create-reminder-from-task": return "Create reminder";
     case "create-entry-for-task": return "Log entry";
+    case "archive-stale-task": return "Archive task";
+    case "batch-complete-overdue":
+      return s.batchIds ? `Clear ${s.batchIds.length}` : "Clear all";
   }
 }
 function actionIcon(s: Suggestion): React.ComponentType<{ className?: string }> {
@@ -715,5 +866,7 @@ function actionIcon(s: Suggestion): React.ComponentType<{ className?: string }> 
     case "complete-overdue-reminder": return CheckCircle2;
     case "create-reminder-from-task": return Bell;
     case "create-entry-for-task": return Plus;
+    case "archive-stale-task": return AlertTriangle;
+    case "batch-complete-overdue": return CheckCircle2;
   }
 }
