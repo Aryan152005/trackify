@@ -32,7 +32,7 @@ export default async function AdminDashboard() {
   }
 
   const activeUsersLast7 = users.filter(
-    (u) => u.lastSignIn && new Date(u.lastSignIn).getTime() > Date.now() - 7 * 24 * 3600 * 1000
+    (u) => u.lastActive && new Date(u.lastActive).getTime() > Date.now() - 7 * 24 * 3600 * 1000
   ).length;
 
   const taskCompletionRate = taskAnalytics.total > 0

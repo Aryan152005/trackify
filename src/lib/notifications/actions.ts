@@ -114,3 +114,21 @@ export async function getUnreadCount(workspaceId: string) {
   if (error) throw new Error(`Failed to get unread count: ${error.message}`);
   return count ?? 0;
 }
+
+/**
+ * Bulk: delete every read notification in the workspace. "Inbox zero"
+ * for people who prefer to keep the list trimmed to actionable items.
+ */
+export async function deleteReadNotifications(workspaceId: string) {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  const { error, count } = await supabase
+    .from("notifications")
+    .delete({ count: "exact" })
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", user.id)
+    .eq("is_read", true);
+
+  if (error) throw new Error(`Failed to clear read notifications: ${error.message}`);
+  return { deleted: count ?? 0 };
+}

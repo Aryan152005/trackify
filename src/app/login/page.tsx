@@ -69,8 +69,22 @@ function LoginForm() {
       }
 
       const nextParam = searchParams.get("next");
-      const safeNext = nextParam && nextParam.startsWith("/") ? nextParam : "/dashboard";
-      router.push(safeNext);
+      let destination = "/dashboard";
+      if (nextParam && nextParam.startsWith("/")) {
+        destination = nextParam;
+      } else {
+        // Honour the user's landing-page preference. Fetched lazily so
+        // unauthenticated flows don't pay the cost.
+        try {
+          const { getUserPreferences } = await import("@/lib/preferences/actions");
+          const { pathForLanding } = await import("@/lib/preferences/types");
+          const prefs = await getUserPreferences();
+          destination = pathForLanding(prefs.landingPage);
+        } catch {
+          destination = "/dashboard";
+        }
+      }
+      router.push(destination);
       router.refresh();
     } catch {
       setMessage({ type: "error", text: "Network error. Please try again." });

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { AlertTriangle, LogOut, Trash2, Crown, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { deleteWorkspace, leaveWorkspace, transferOwnership } from "@/lib/workspace/actions";
 import type { WorkspaceRole } from "@/lib/types/workspace";
 
@@ -21,6 +22,8 @@ export function DangerZone({ workspaceId, workspaceName, isPersonal, role, membe
   const router = useRouter();
   const [busy, setBusy] = useState<"leave" | "delete" | "transfer" | null>(null);
   const [transferTo, setTransferTo] = useState("");
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const [confirmTransfer, setConfirmTransfer] = useState(false);
 
   const isOwner = role === "owner";
   const isMember = !!role;
@@ -45,8 +48,7 @@ export function DangerZone({ workspaceId, workspaceName, isPersonal, role, membe
     }
   }
 
-  async function handleLeave() {
-    if (!confirm(`Leave "${workspaceName}"? You'll lose access to everything in it.`)) return;
+  async function performLeave() {
     setBusy("leave");
     try {
       await leaveWorkspace(workspaceId);
@@ -58,11 +60,10 @@ export function DangerZone({ workspaceId, workspaceName, isPersonal, role, membe
     }
   }
 
-  async function handleTransfer() {
+  async function performTransfer() {
     if (!transferTo) return;
     const picked = members.find((m) => m.user_id === transferTo);
     if (!picked) return;
-    if (!confirm(`Transfer ownership of "${workspaceName}" to ${picked.name}? You'll become admin.`)) return;
     setBusy("transfer");
     try {
       await transferOwnership(workspaceId, transferTo);
@@ -75,6 +76,9 @@ export function DangerZone({ workspaceId, workspaceName, isPersonal, role, membe
       setBusy(null);
     }
   }
+
+  const transferPickedName =
+    members.find((m) => m.user_id === transferTo)?.name ?? "";
 
   const transferCandidates = members.filter((m) => m.role !== "owner");
 
@@ -95,7 +99,7 @@ export function DangerZone({ workspaceId, workspaceName, isPersonal, role, membe
               <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Leave this workspace</p>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">You&apos;ll lose access to its content immediately.</p>
             </div>
-            <Button variant="outline" size="sm" onClick={handleLeave} disabled={busy === "leave"} className="gap-1.5">
+            <Button variant="outline" size="sm" onClick={() => setConfirmLeave(true)} disabled={busy === "leave"} className="gap-1.5">
               {busy === "leave" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogOut className="h-3.5 w-3.5" />}
               Leave
             </Button>
@@ -126,7 +130,7 @@ export function DangerZone({ workspaceId, workspaceName, isPersonal, role, membe
                 variant="outline"
                 size="sm"
                 disabled={!transferTo || busy === "transfer"}
-                onClick={handleTransfer}
+                onClick={() => setConfirmTransfer(true)}
                 className="gap-1.5"
               >
                 {busy === "transfer" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Crown className="h-3.5 w-3.5" />}
@@ -164,6 +168,31 @@ export function DangerZone({ workspaceId, workspaceName, isPersonal, role, membe
           </p>
         )}
       </CardContent>
+
+      <ConfirmDialog
+        open={confirmLeave}
+        onOpenChange={setConfirmLeave}
+        title={`Leave "${workspaceName}"?`}
+        description="You'll lose access to every page, board, task, note, and reminder in this workspace. You can be re-invited later."
+        confirmLabel="Leave workspace"
+        cancelLabel="Stay"
+        variant="danger"
+        onConfirm={performLeave}
+      />
+
+      <ConfirmDialog
+        open={confirmTransfer}
+        onOpenChange={setConfirmTransfer}
+        title="Transfer ownership?"
+        description={
+          transferPickedName
+            ? `${transferPickedName} will become the owner of "${workspaceName}". You'll be demoted to admin — they'll be able to remove you if they choose.`
+            : ""
+        }
+        confirmLabel="Transfer"
+        cancelLabel="Cancel"
+        onConfirm={performTransfer}
+      />
     </Card>
   );
 }

@@ -16,6 +16,7 @@ import { CollaborationToolbar } from "@/components/collaboration/collaboration-t
 import { NoteHistoryPanel } from "@/components/notes/note-history-panel";
 import { Button } from "@/components/ui/button";
 import { History } from "lucide-react";
+import { PrivateToggle } from "@/components/personal/private-toggle";
 
 const BlockEditor = dynamic(
   () =>
@@ -297,6 +298,11 @@ export default function PageEditorPage() {
               entityTitle={title || "Untitled"}
               showCursors={false}
             />
+            <PrivateToggle
+              entityType="pages"
+              entityId={pageId}
+              isPrivate={!!(page as unknown as { is_private?: boolean }).is_private}
+            />
             <Button
               variant="outline"
               size="sm"
@@ -315,6 +321,7 @@ export default function PageEditorPage() {
 
           <div className="mt-3 rounded-xl border border-zinc-200 bg-white p-1 dark:border-zinc-800 dark:bg-zinc-900">
             <BlockEditor
+              pageId={pageId}
               initialContent={page.content}
               onChange={handleContentChange}
               editable={true}

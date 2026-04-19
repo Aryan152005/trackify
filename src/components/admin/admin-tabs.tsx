@@ -3,12 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { format } from "date-fns";
+import { formatIST } from "@/lib/utils/datetime";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { AdminCharts } from "@/components/admin/admin-charts";
-import { addToWhitelist, removeFromWhitelist, approveWhitelistRequest } from "@/lib/admin/email-actions";
+import { addToWhitelist, removeFromWhitelist, approveWhitelistRequest, denyWhitelistRequest } from "@/lib/admin/email-actions";
 import { updateFeedbackStatus } from "@/lib/feedback/actions";
 import { renderWhitelistApproved, type RenderedEmail } from "@/lib/admin/preview-actions";
 import { EmailPreviewDialog } from "@/components/admin/email-preview-dialog";
@@ -46,6 +46,8 @@ interface AdminTabsProps {
   users: {
     id: string; name: string; email: string; avatarUrl: string | null;
     joinedAt: string; lastSignIn: string | null;
+    lastActivityAt: string | null;
+    lastActive: string | null;
     entryCount: number; taskStats: { total: number; done: number }; pageCount: number;
   }[];
   whitelist: { email: string; created_at: string }[];
@@ -140,6 +142,21 @@ export function AdminTabs({ users, whitelist: initialWhitelist, whitelistRequest
       openWhitelistPreview(result.email, result.name ?? "");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to approve");
+    }
+    setActionLoading(null);
+  }
+
+  // Reject counterpart — keeps the request in the list but marked "denied"
+  // so the admin has an audit trail. No automatic email — admins can use
+  // the targeted-email composer if they want to write a decline note.
+  async function handleRejectRequest(requestId: string) {
+    setActionLoading(requestId);
+    try {
+      const result = await denyWhitelistRequest(requestId);
+      setRequests((prev) => prev.map((r) => r.id === requestId ? { ...r, status: "denied" } : r));
+      toast.success(`Rejected request from ${result.email}.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to reject");
     }
     setActionLoading(null);
   }
@@ -246,10 +263,25 @@ export function AdminTabs({ users, whitelist: initialWhitelist, whitelistRequest
                       <td className="py-3 text-zinc-500">{u.email}</td>
                       <td className="py-3">{u.entryCount}</td>
                       <td className="py-3">{u.taskStats.done}/{u.taskStats.total}</td>
-                      <td className="py-3 text-zinc-400 text-xs">
-                        {u.lastSignIn ? format(new Date(u.lastSignIn), "MMM d, HH:mm") : "Never"}
+                      <td
+                        className="py-3 text-xs text-zinc-400"
+                        title={
+                          u.lastActive
+                            ? `Last active ${formatIST(u.lastActive)} IST${
+                                u.lastSignIn ? ` · last login ${formatIST(u.lastSignIn)} IST` : ""
+                              }`
+                            : "Never active"
+                        }
+                      >
+                        {u.lastActive ? formatIST(u.lastActive, {
+                          month: "short", day: "numeric",
+                          hour: "numeric", minute: "2-digit", hour12: true,
+                        }) : "Never"}
                       </td>
-                      <td className="py-3 text-zinc-400 text-xs">{format(new Date(u.joinedAt), "MMM d, yyyy")}</td>
+                      <td className="py-3 text-zinc-400 text-xs">{formatIST(u.joinedAt, {
+                        month: "short", day: "numeric", year: "numeric",
+                        hour: undefined, minute: undefined, hour12: undefined,
+                      })}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -296,7 +328,10 @@ export function AdminTabs({ users, whitelist: initialWhitelist, whitelistRequest
                   <div key={w.email} className="flex items-center justify-between gap-3 rounded-lg border border-zinc-100 px-4 py-2.5 dark:border-zinc-800">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-200">{w.email}</p>
-                      <p className="text-xs text-zinc-400">Added {format(new Date(w.created_at), "MMM d, yyyy")}</p>
+                      <p className="text-xs text-zinc-400">Added {formatIST(w.created_at, {
+                        month: "short", day: "numeric", year: "numeric",
+                        hour: undefined, minute: undefined, hour12: undefined,
+                      })}</p>
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
                       <button
@@ -361,17 +396,29 @@ export function AdminTabs({ users, whitelist: initialWhitelist, whitelistRequest
                       </div>
                       {r.name && <p className="mt-0.5 text-xs text-zinc-500">Name: {r.name}</p>}
                       {r.reason && <p className="mt-0.5 text-xs text-zinc-400">&quot;{r.reason}&quot;</p>}
-                      <p className="mt-1 text-[11px] text-zinc-300">{format(new Date(r.created_at), "MMM d, yyyy HH:mm")}</p>
+                      <p className="mt-1 text-[11px] text-zinc-300">{formatIST(r.created_at)} IST</p>
                     </div>
                     {r.status === "pending" && (
-                      <Button
-                        size="sm"
-                        onClick={() => handleApproveRequest(r.id)}
-                        disabled={actionLoading === r.id}
-                      >
-                        {actionLoading === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="mr-1 h-4 w-4" />}
-                        Approve
-                      </Button>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleRejectRequest(r.id)}
+                          disabled={actionLoading === r.id}
+                          className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
+                        >
+                          {actionLoading === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="mr-1 h-4 w-4" />}
+                          Reject
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => handleApproveRequest(r.id)}
+                          disabled={actionLoading === r.id}
+                        >
+                          {actionLoading === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="mr-1 h-4 w-4" />}
+                          Approve
+                        </Button>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -428,7 +475,7 @@ export function AdminTabs({ users, whitelist: initialWhitelist, whitelistRequest
                                 {f.email && <span className="ml-1.5 text-xs font-normal text-zinc-500">· {f.email}</span>}
                               </p>
                               <p className="text-[11px] text-zinc-400">
-                                {format(new Date(f.created_at), "MMM d, yyyy 'at' HH:mm")}
+                                {formatIST(f.created_at)} IST
                                 {f.rating != null && (
                                   <span className="ml-2 inline-flex items-center gap-0.5 text-amber-500">
                                     {"★".repeat(f.rating)}{"☆".repeat(5 - f.rating)}

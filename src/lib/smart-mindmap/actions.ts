@@ -49,7 +49,7 @@ export async function setTaskDueFromReminder(
     userId: user.id,
   });
 
-  revalidatePath("/mindmaps/smart");
+  revalidatePath("/mindmaps");
   revalidatePath("/tasks");
 }
 
@@ -84,7 +84,7 @@ export async function completeReminder(reminderId: string) {
     userId: user.id,
   });
 
-  revalidatePath("/mindmaps/smart");
+  revalidatePath("/mindmaps");
   revalidatePath("/reminders");
 }
 
@@ -132,7 +132,7 @@ export async function createReminderForTask(
     userId: user.id,
   });
 
-  revalidatePath("/mindmaps/smart");
+  revalidatePath("/mindmaps");
   revalidatePath("/reminders");
   return { id: data.id as string };
 }
@@ -180,7 +180,7 @@ export async function createEntryForTask(
     userId: user.id,
   });
 
-  revalidatePath("/mindmaps/smart");
+  revalidatePath("/mindmaps");
   revalidatePath("/entries");
   return { id: data.id as string };
 }

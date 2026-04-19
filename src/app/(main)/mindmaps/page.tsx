@@ -11,10 +11,12 @@ import {
   AnimatedList,
   AnimatedItem,
 } from "@/components/ui/animated-layout";
-import { Plus, Brain, Sparkles } from "lucide-react";
+import { Plus, Brain } from "lucide-react";
 import { createMindMap } from "@/lib/mindmaps/actions";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SharedSection } from "@/components/collaboration/shared-section";
+import { buildSmartGraph } from "@/lib/smart-mindmap/graph";
+import { SmartMindMapSection } from "@/components/mindmaps/smart-mindmap-section";
 
 export default async function MindMapsPage() {
   const supabase = await createClient();
@@ -38,11 +40,16 @@ export default async function MindMapsPage() {
     );
   }
 
-  const { data: mindmaps } = await supabase
-    .from("mindmaps")
-    .select("id, title, description, updated_at, created_at")
-    .eq("workspace_id", workspaceId)
-    .order("updated_at", { ascending: false });
+  // Fetch both surfaces in parallel: the auto-built smart graph (always
+  // visible at the top of this page) AND the user's saved mind maps below.
+  const [smartGraph, { data: mindmaps }] = await Promise.all([
+    buildSmartGraph(workspaceId),
+    supabase
+      .from("mindmaps")
+      .select("id, title, description, updated_at, created_at")
+      .eq("workspace_id", workspaceId)
+      .order("updated_at", { ascending: false }),
+  ]);
 
   async function handleCreate() {
     "use server";
@@ -54,28 +61,43 @@ export default async function MindMapsPage() {
 
   return (
     <AnimatedPage>
-      <div className="space-y-8">
+      <div className="space-y-6">
         {/* Header */}
         <PageHeader
           title="Mind Maps"
-          description="Visual brainstorming and idea organization"
+          description="The smart map below auto-builds from your work. Create your own maps beneath it."
           actions={
-            <>
-              <Link href="/mindmaps/smart">
-                <Button variant="outline">
-                  <Sparkles className="mr-2 h-4 w-4 text-indigo-500" />
-                  Smart Mindmap
-                </Button>
-              </Link>
-              <form action={handleCreate}>
-                <Button type="submit">
-                  <Plus className="mr-2 h-4 w-4" />
-                  New Mind Map
-                </Button>
-              </form>
-            </>
+            <form action={handleCreate}>
+              <Button type="submit">
+                <Plus className="mr-2 h-4 w-4" />
+                New Mind Map
+              </Button>
+            </form>
           }
         />
+
+        {/* Smart mindmap — auto-generated, collapsible, always on this page. */}
+        <SmartMindMapSection graph={smartGraph} workspaceId={workspaceId} />
+
+        {/* Divider + section label for user-created maps. */}
+        <div className="flex items-end justify-between border-b border-zinc-200 pb-2 dark:border-zinc-800">
+          <div>
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+              Your mind maps
+            </h2>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Manual brainstorms you&apos;ve drawn yourself{mindmaps && mindmaps.length > 0 ? ` · ${mindmaps.length}` : ""}
+            </p>
+          </div>
+          {mindmaps && mindmaps.length > 0 && (
+            <form action={handleCreate}>
+              <Button type="submit" variant="outline" size="sm">
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                New
+              </Button>
+            </form>
+          )}
+        </div>
 
         {/* Mind maps grid */}
         {mindmaps && mindmaps.length > 0 ? (

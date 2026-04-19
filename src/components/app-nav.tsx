@@ -39,6 +39,9 @@ import {
   Users,
   Target,
   Activity,
+  Sun,
+  Lock,
+  Ticket,
 } from "lucide-react";
 
 const CommandPalette = dynamic(
@@ -46,40 +49,57 @@ const CommandPalette = dynamic(
   { ssr: false }
 );
 
+// Primary nav — deliberately kept to 4 items so the chrome stays calm and
+// the app reads as a daily-use todo tool, not a feature catalogue.
+// Everything else is still one click away under "Explore".
 const primaryNav = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/entries", label: "Entries", icon: FileText },
+  { href: "/today", label: "Today", icon: Sun },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
-  { href: "/boards", label: "Boards", icon: Columns3 },
   { href: "/notes", label: "Notes", icon: StickyNote },
-  { href: "/calendar", label: "Calendar", icon: Calendar },
-  { href: "/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/reports", label: "Reports", icon: FileDown },
 ];
 
-const moreNav = [
-  { href: "/mindmaps", label: "Mind Maps", icon: Brain },
-  { href: "/timeline", label: "Timeline", icon: Clock },
+// Explore — every other feature the app ships. Grouped so the dropdown reads
+// like a sensible directory: "see your work", "organise your work", "extras".
+// No feature has been removed; this is purely a re-grouping of the nav.
+const exploreNav = [
+  // Overview / analytics
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/reports", label: "Reports", icon: FileDown },
+  // Primary entities
+  { href: "/entries", label: "Entries", icon: FileText },
+  { href: "/boards", label: "Boards", icon: Columns3 },
+  { href: "/calendar", label: "Calendar", icon: Calendar },
   { href: "/reminders", label: "Reminders", icon: Bell },
+  { href: "/bookings", label: "Bookings", icon: Ticket },
+  { href: "/timeline", label: "Timeline", icon: Clock },
+  // Creative / thinking tools
+  { href: "/mindmaps", label: "Mind Maps", icon: Brain },
   { href: "/drawings", label: "Drawings", icon: Pencil },
   { href: "/challenges", label: "Challenges", icon: Target },
+  // Private lane
+  { href: "/personal", label: "Personal Space", icon: Lock },
+  // Collab / admin
   { href: "/requests", label: "Requests", icon: MessageSquare },
   { href: "/workspace/members", label: "Team Members", icon: Users },
   { href: "/workspace/activity", label: "Workspace Activity", icon: Activity },
+  // Settings / help
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/help", label: "Help & Guide", icon: HelpCircle },
   { href: "/feedback", label: "Feedback", icon: Star },
 ];
 
-export const navItems = primaryNav;
+// Back-compat: other code imports navItems to render the drawer — give it
+// the union so the mobile menu still shows everything.
+export const navItems = [...primaryNav, ...exploreNav];
 
 export function AppNav({ isAdmin = false }: { isAdmin?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const moreNavWithAdmin = isAdmin
-    ? [{ href: "/admin", label: "Admin", icon: Shield }, ...moreNav]
-    : moreNav;
+    ? [{ href: "/admin", label: "Admin", icon: Shield }, ...exploreNav]
+    : exploreNav;
 
   async function doSignOut() {
     try {
@@ -139,7 +159,7 @@ export function AppNav({ isAdmin = false }: { isAdmin?: boolean }) {
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
               <button
-                title="More"
+                title="Explore every feature"
                 className={`flex shrink-0 items-center gap-1 rounded-lg px-2 py-2 text-[13px] font-medium transition-colors xl:px-2.5 ${
                   isMoreActive
                     ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300"
@@ -147,7 +167,7 @@ export function AppNav({ isAdmin = false }: { isAdmin?: boolean }) {
                 }`}
               >
                 <MoreHorizontal className="h-4 w-4 shrink-0" />
-                <span className="hidden xl:inline">More</span>
+                <span className="hidden xl:inline">Explore</span>
               </button>
             </DropdownMenu.Trigger>
             <DropdownMenu.Portal>

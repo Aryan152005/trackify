@@ -11,11 +11,13 @@ import {
 } from "@/lib/mindmaps/actions";
 import { AnimatedPage } from "@/components/ui/animated-layout";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ArrowLeft, Loader2, Trash2, Check, Cloud } from "lucide-react";
 import Link from "next/link";
 import type { MindMap, MindMapNode, MindMapEdge } from "@/lib/types/mindmap";
 import { CollaborationToolbar } from "@/components/collaboration/collaboration-toolbar";
 import { toast } from "sonner";
+import { useYjsDoc } from "@/lib/collab/use-yjs-doc";
 
 const MindMapCanvas = dynamic(
   () =>
@@ -46,12 +48,19 @@ export default function MindMapDetailPage() {
     "saved" | "saving" | "unsaved" | "idle"
   >("idle");
   const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [remoteScene, setRemoteScene] = useState<{ nodes: MindMapNode[]; edges: MindMapEdge[] } | null>(null);
 
-  // Broadcast channel (peer collab)
-  const channelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
-  const selfIdRef = useRef<string>("");
-  const lastSceneSigRef = useRef<string>("");
+  // --- Yjs provider for the mind map. Replaces the previous broadcast channel
+  // entirely: CRDT merges mean concurrent edits no longer overwrite each other,
+  // and the binary state is persisted in `mindmaps.yjs_state` (migration 032).
+  const { doc: yDoc, ready: yReady } = useYjsDoc({
+    entity: "mindmaps",
+    id: mindmapId,
+    enabled: !!mindmapId,
+  });
+  // Suppress the "observer -> setRemoteScene -> broadcast back" loop.
+  const applyingFromYRef = useRef(false);
 
   // Refs for debounced auto-save
   const nodesRef = useRef<MindMapNode[]>([]);
@@ -130,69 +139,101 @@ export default function MindMapDetailPage() {
     };
   }, []);
 
-  // Real-time collab channel — nodes + edges sync across peers. Viewport
-  // stays per-user (independent pan/zoom, like Figma).
+  // Yjs observers: when the shared maps change (peer OR local transact),
+  // rebuild the scene and push it into the canvas through `remoteScene`.
+  // Viewport intentionally stays per-user (independent pan/zoom, like Figma).
   useEffect(() => {
-    if (!mindmapId) return;
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
-      selfIdRef.current = data.user?.id ?? Math.random().toString(36).slice(2);
-    });
-    const channel = supabase.channel(`mindmap-scene-${mindmapId}`, {
-      config: { broadcast: { self: false } },
-    });
-    channel.on("broadcast", { event: "scene" }, (payload) => {
-      const p = payload.payload as { from: string; nodes: MindMapNode[]; edges: MindMapEdge[] };
-      if (!p || p.from === selfIdRef.current) return;
-      // Update our refs so debounced save has the fresh scene.
-      nodesRef.current = p.nodes ?? [];
-      edgesRef.current = p.edges ?? [];
-      setRemoteScene({ nodes: p.nodes ?? [], edges: p.edges ?? [] });
-    });
-    channel.subscribe();
-    channelRef.current = channel;
-    return () => {
-      supabase.removeChannel(channel);
-      channelRef.current = null;
+    if (!yDoc || !yReady) return;
+    const yNodes = yDoc.getMap<MindMapNode>("nodes");
+    const yEdges = yDoc.getMap<MindMapEdge>("edges");
+
+    const republish = () => {
+      const nextNodes: MindMapNode[] = [];
+      yNodes.forEach((n) => nextNodes.push(n));
+      const nextEdges: MindMapEdge[] = [];
+      yEdges.forEach((e) => nextEdges.push(e));
+      nodesRef.current = nextNodes;
+      edgesRef.current = nextEdges;
+      applyingFromYRef.current = true;
+      setRemoteScene({ nodes: nextNodes, edges: nextEdges });
+      // The canvas applies `remoteScene` async — release on next tick.
+      setTimeout(() => { applyingFromYRef.current = false; }, 0);
     };
-  }, [mindmapId]);
+
+    // Initial seed: if the Y doc is empty (first time opening since migration
+    // 032), copy the legacy JSON in. Otherwise just render what Yjs has.
+    if (yNodes.size === 0 && yEdges.size === 0 && (nodesRef.current.length > 0 || edgesRef.current.length > 0)) {
+      yDoc.transact(() => {
+        for (const n of nodesRef.current) yNodes.set(n.id, n);
+        for (const e of edgesRef.current) yEdges.set(e.id, e);
+      }, "seed");
+    } else {
+      republish();
+    }
+
+    yNodes.observe(republish);
+    yEdges.observe(republish);
+    return () => {
+      yNodes.unobserve(republish);
+      yEdges.unobserve(republish);
+    };
+  }, [yDoc, yReady]);
 
   // -----------------------------------------------------------------------
   // Handlers
   // -----------------------------------------------------------------------
 
-  // Broadcast the current scene to peers. Keeps a signature check so we don't
-  // flood the channel when onNodesChange fires without actual geometry changes.
-  const broadcastScene = useCallback(() => {
-    if (!channelRef.current) return;
-    const sig =
-      `${nodesRef.current.length}:${nodesRef.current.map((n) => `${n.id}@${n.position.x.toFixed(0)},${n.position.y.toFixed(0)}`).join("|")}` +
-      `::${edgesRef.current.length}:${edgesRef.current.map((e) => `${e.source}-${e.target}`).join("|")}`;
-    if (sig === lastSceneSigRef.current) return;
-    lastSceneSigRef.current = sig;
-    channelRef.current.send({
-      type: "broadcast",
-      event: "scene",
-      payload: { from: selfIdRef.current, nodes: nodesRef.current, edges: edgesRef.current },
-    });
-  }, []);
+  // Diff local changes into the shared Yjs maps. The provider then broadcasts
+  // the delta to peers and debounces a snapshot save. We still fire triggerSave
+  // so the legacy JSON columns (mindmaps.nodes/edges) stay populated for
+  // exports and any non-Yjs reader.
+  const syncToY = useCallback(
+    (nodes: MindMapNode[], edges: MindMapEdge[]) => {
+      if (!yDoc || applyingFromYRef.current) return;
+      const yNodes = yDoc.getMap<MindMapNode>("nodes");
+      const yEdges = yDoc.getMap<MindMapEdge>("edges");
+      yDoc.transact(() => {
+        const nextNodeIds = new Set(nodes.map((n) => n.id));
+        for (const id of Array.from(yNodes.keys())) {
+          if (!nextNodeIds.has(id)) yNodes.delete(id);
+        }
+        for (const n of nodes) {
+          const prev = yNodes.get(n.id);
+          if (!prev || JSON.stringify(prev) !== JSON.stringify(n)) {
+            yNodes.set(n.id, n);
+          }
+        }
+        const nextEdgeIds = new Set(edges.map((e) => e.id));
+        for (const id of Array.from(yEdges.keys())) {
+          if (!nextEdgeIds.has(id)) yEdges.delete(id);
+        }
+        for (const e of edges) {
+          const prev = yEdges.get(e.id);
+          if (!prev || JSON.stringify(prev) !== JSON.stringify(e)) {
+            yEdges.set(e.id, e);
+          }
+        }
+      }, "local");
+    },
+    [yDoc]
+  );
 
   const handleNodesChange = useCallback(
     (nodes: MindMapNode[]) => {
       nodesRef.current = nodes;
       triggerSave();
-      broadcastScene();
+      syncToY(nodes, edgesRef.current);
     },
-    [triggerSave, broadcastScene]
+    [triggerSave, syncToY]
   );
 
   const handleEdgesChange = useCallback(
     (edges: MindMapEdge[]) => {
       edgesRef.current = edges;
       triggerSave();
-      broadcastScene();
+      syncToY(nodesRef.current, edges);
     },
-    [triggerSave, broadcastScene]
+    [triggerSave, syncToY]
   );
 
   const handleViewportChange = useCallback(
@@ -219,13 +260,17 @@ export default function MindMapDetailPage() {
   }
 
   async function handleDelete() {
-    if (!window.confirm("Are you sure you want to delete this mind map?"))
-      return;
+    setConfirmDelete(true);
+  }
+
+  async function performDelete() {
     setDeleting(true);
     try {
       await deleteMindMap(mindmapId);
+      toast.success("Mind map deleted");
       router.push("/mindmaps");
-    } catch {
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete mind map");
       setDeleting(false);
     }
   }
@@ -345,6 +390,17 @@ export default function MindMapDetailPage() {
           />
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title="Delete this mind map?"
+        description={`"${title || "Untitled Mind Map"}" will be permanently removed. This can't be undone.`}
+        confirmLabel="Delete"
+        cancelLabel="Keep"
+        variant="danger"
+        onConfirm={performDelete}
+      />
     </AnimatedPage>
   );
 }

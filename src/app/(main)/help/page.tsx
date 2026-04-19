@@ -52,7 +52,7 @@ const guides: { category: string; items: Guide[] }[] = [
   {
     category: "Smart & Automated",
     items: [
-      { icon: Sparkles, title: "Smart Mindmap", tryUrl: "/mindmaps/smart", steps: ["Open Mind Maps > Smart Mindmap", "Auto-generated from your tasks, reminders, entries, notes", "Hover a node to dim others; see only its connections", "Click a suggestion to auto-link related items (set due date, create reminder, etc.)"] },
+      { icon: Sparkles, title: "Smart Mindmap", tryUrl: "/mindmaps", steps: ["Open Mind Maps — the smart map is at the top, always up to date", "Auto-generated from your tasks, reminders, entries, notes", "Hover a node to dim others; see only its connections", "Click a suggestion to auto-link related items (set due date, create reminder, etc.)", "Collapse the section if you want to focus on your own mind maps"] },
       { icon: Bell, title: "Push Notifications", tryUrl: "/reminders", steps: ["Click Enable notifications in the banner at the top, OR go to Reminders", "Grant browser permission when asked", "Repeat on each device (laptop, phone, tablet)", "Reminders fire on ALL your devices even when the app is closed"] },
       { icon: Activity, title: "Admin · System Logs", tryUrl: "/admin/logs", steps: ["Admins only: go to Admin > System Logs", "Filter by service, level (error/warn/info), tag, time range, or search", "CSV export of any filtered view", "Live tail toggle streams events in realtime"] },
     ],

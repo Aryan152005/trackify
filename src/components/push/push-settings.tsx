@@ -5,6 +5,7 @@ import { formatDistanceToNow } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Bell, BellOff, Loader2, Send, Trash2, Monitor, Smartphone } from "lucide-react";
 import {
   isPushSupported,
@@ -27,6 +28,7 @@ export function PushSettings({ publicKey }: Props) {
   const [msg, setMsg] = useState<{ type: "success" | "warn" | "error" | "info"; text: string } | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [testingAll, setTestingAll] = useState(false);
+  const [deviceToRemove, setDeviceToRemove] = useState<Device | null>(null);
 
   const refreshDevices = useCallback(async () => {
     try {
@@ -93,8 +95,7 @@ export function PushSettings({ publicKey }: Props) {
     setTestingAll(false);
   }
 
-  async function handleRemoveDevice(id: string) {
-    if (!confirm("Remove this device? You'll stop getting notifications on it.")) return;
+  async function performRemoveDevice(id: string) {
     try {
       await removeDevice(id);
       await refreshDevices();
@@ -181,6 +182,25 @@ export function PushSettings({ publicKey }: Props) {
           {" · "}Browser permission: <span className="font-medium">{permission}</span>
         </p>
 
+        <ConfirmDialog
+          open={!!deviceToRemove}
+          onOpenChange={(next) => !next && setDeviceToRemove(null)}
+          title="Remove this device?"
+          description={
+            deviceToRemove
+              ? `"${deviceToRemove.label}" will stop receiving reminder push notifications. You can re-subscribe from that device later.`
+              : ""
+          }
+          confirmLabel="Remove"
+          cancelLabel="Keep"
+          variant="danger"
+          onConfirm={() => {
+            const id = deviceToRemove?.id;
+            setDeviceToRemove(null);
+            if (id) performRemoveDevice(id);
+          }}
+        />
+
         {/* Connected Devices */}
         {devices.length > 0 && (
           <div className="mt-2 border-t border-zinc-200 pt-4 dark:border-zinc-800">
@@ -223,7 +243,7 @@ export function PushSettings({ publicKey }: Props) {
                     </div>
                     <button
                       type="button"
-                      onClick={() => handleRemoveDevice(d.id)}
+                      onClick={() => setDeviceToRemove(d)}
                       className="shrink-0 rounded p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
                       title="Remove this device"
                     >

@@ -26,15 +26,16 @@ export interface UpdateEntryInput {
 
 export async function updateEntry(entryId: string, patch: UpdateEntryInput) {
   const { supabase, user } = await requireUser();
+  void user;
 
-  // Ownership check: only the creator can edit.
+  // Access check via RLS — workspace editors can edit shared entries; private
+  // entries remain editable only by the creator (enforced by RLS policy).
   const { data: existing } = await supabase
     .from("work_entries")
     .select("id, workspace_id, title")
     .eq("id", entryId)
-    .eq("user_id", user.id)
     .maybeSingle();
-  if (!existing) throw new Error("Entry not found or not yours");
+  if (!existing) throw new Error("Entry not found or you don't have access");
 
   const { error } = await supabase
     .from("work_entries")
@@ -52,18 +53,20 @@ export async function updateEntry(entryId: string, patch: UpdateEntryInput) {
 
   revalidatePath("/entries");
   revalidatePath(`/entries/${entryId}`);
+  revalidatePath("/today");
+  revalidatePath("/mindmaps");
 }
 
 export async function deleteEntry(entryId: string) {
   const { supabase, user } = await requireUser();
+  void user;
 
   const { data: existing } = await supabase
     .from("work_entries")
     .select("id, workspace_id, title")
     .eq("id", entryId)
-    .eq("user_id", user.id)
     .maybeSingle();
-  if (!existing) throw new Error("Entry not found or not yours");
+  if (!existing) throw new Error("Entry not found or you don't have access");
 
   const { error } = await supabase.from("work_entries").delete().eq("id", entryId);
   if (error) throw new Error(error.message);
@@ -77,4 +80,6 @@ export async function deleteEntry(entryId: string) {
   });
 
   revalidatePath("/entries");
+  revalidatePath("/today");
+  revalidatePath("/mindmaps");
 }

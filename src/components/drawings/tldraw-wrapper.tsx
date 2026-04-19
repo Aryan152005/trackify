@@ -1,9 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import "@excalidraw/excalidraw/index.css";
+import * as Y from "yjs";
+import { useYjsDoc } from "@/lib/collab/use-yjs-doc";
+import { CanvasCursors } from "@/components/collaboration/canvas-cursors";
 
 // Excalidraw is client-only and heavy — load it lazily on mount.
 const Excalidraw = dynamic(
@@ -19,133 +22,204 @@ const Excalidraw = dynamic(
 );
 
 interface TldrawWrapperProps {
+  /** Persisted drawing id — drives the Yjs channel and snapshot column. */
+  drawingId: string;
+  /** Legacy JSON seed. Used once if the Y.Doc has no saved state yet. */
   initialData?: Record<string, unknown>;
+  /** Called with the derived JSON scene whenever elements change — used to
+   *  keep the legacy `data` column populated for exports. */
   onChange?: (data: Record<string, unknown>) => void;
-  /** Remote updates to apply to the scene without re-mounting. */
-  remoteUpdate?: { elements?: unknown[]; appState?: Record<string, unknown> } | null;
 }
 
-/**
- * Drawing canvas powered by Excalidraw (MIT-licensed, free, no commercial
- * license required). Exposes the same {initialData, onChange} API as the
- * previous tldraw wrapper so the calling page doesn't need changes.
- *
- * Old tldraw-format data in the DB will fail to parse here — the canvas
- * just opens blank and the user can re-draw.
- */
-export function TldrawWrapper({ initialData, onChange, remoteUpdate }: TldrawWrapperProps) {
-  const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
-  // Set while applying a remote peer's update — suppresses echo back to peers.
-  const applyingRemoteRef = useRef(false);
-  // Throttle: fire parent's onChange at most every FRAME_MS.
-  const lastFireRef = useRef(0);
-  const trailingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingRef = useRef<{ elements: unknown[]; appState: Record<string, unknown>; files: Record<string, unknown> } | null>(null);
-  // Figma-style approach: local rendering is always instant (Excalidraw handles
-  // that internally). We only broadcast ~10 fps so network + JSON serialisation
-  // don't block the drawing loop. Peers interpolate visually via their own render.
-  const FRAME_MS = 100;
-  const [parsedInitial, setParsedInitial] = useState<{
-    elements?: unknown[];
-    appState?: Record<string, unknown>;
-    files?: Record<string, unknown>;
-  } | null>(null);
+type ExElement = { id: string; version: number } & Record<string, unknown>;
 
-  // Parse initialData into the Excalidraw shape. If it's tldraw legacy or empty, start fresh.
-  useEffect(() => {
-    if (!initialData) {
-      setParsedInitial({ elements: [], appState: { collaborators: new Map() } });
-      return;
-    }
-    try {
-      // Excalidraw serializes as { type, version, source, elements, appState, files }
-      const maybeElements = (initialData as { elements?: unknown[] }).elements;
-      if (Array.isArray(maybeElements)) {
-        // Excalidraw expects appState.collaborators to be a Map; JSON round-trip
-        // turns it into {} which breaks .forEach. Replace with an empty Map.
-        const rawAppState = (initialData as { appState?: Record<string, unknown> }).appState ?? {};
-        const safeAppState = { ...rawAppState, collaborators: new Map() };
-        setParsedInitial({
-          elements: maybeElements,
-          appState: safeAppState,
-          files: (initialData as { files?: Record<string, unknown> }).files ?? {},
-        });
-      } else {
-        // Not Excalidraw format (likely legacy tldraw) — open blank
-        setParsedInitial({ elements: [], appState: { collaborators: new Map() } });
-      }
-    } catch {
-      setParsedInitial({ elements: [], appState: { collaborators: new Map() } });
-    }
+/**
+ * Drawing canvas powered by Excalidraw + Yjs.
+ *
+ * How collab works now:
+ *   - We keep a `Y.Map<string, ExElement>` keyed by element id.
+ *   - On local Excalidraw change we transact: upsert every element whose
+ *     `version` advanced, delete keys no longer in the scene.
+ *   - On remote Y.Map changes we reapply the full element array. Excalidraw's
+ *     `updateScene` is diffing-aware so this is fine.
+ *   - Peer updates carry an origin tag so our observer doesn't re-broadcast.
+ *   - Each user keeps their own tool, zoom, camera — `appState.collaborators`
+ *     is locally reset to an empty Map on every mount (Excalidraw quirk).
+ *
+ * Persistence:
+ *   - Yjs binary state goes into `drawings.yjs_state` via the provider.
+ *   - The legacy `drawings.data` JSON is still written by the caller via the
+ *     `onChange` we still fire — that keeps exports and old viewers working.
+ */
+export function TldrawWrapper({ drawingId, initialData, onChange }: TldrawWrapperProps) {
+  const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
+
+  const { doc, provider, ready, self } = useYjsDoc({
+    entity: "drawings",
+    id: drawingId,
+    enabled: !!drawingId,
+  });
+
+  // Y.Map<id, ExElement>. Lazily created whenever `doc` is ready.
+  const elementsMap = useMemo(() => doc?.getMap<ExElement>("elements") ?? null, [doc]);
+
+  // Snapshot of versions we last wrote to Y — used to skip unchanged elements.
+  const lastSentVersionsRef = useRef<Map<string, number>>(new Map());
+
+  // When `true`, our onChange handler treats the next Excalidraw change as
+  // externally-driven (a peer update being applied) and skips writing to Y.
+  const applyingRemoteRef = useRef(false);
+
+  // Parse `initialData` once so we can seed the Y.Map if it's empty.
+  const seedElements = useMemo<ExElement[]>(() => {
+    if (!initialData) return [];
+    const maybe = (initialData as { elements?: unknown[] }).elements;
+    return Array.isArray(maybe) ? (maybe as ExElement[]) : [];
   }, [initialData]);
 
-  // Throttled onChange — fires leading + trailing within each frame window.
-  // Skips firing while we're applying a peer's update (prevents echo loop).
-  const handleChange = useCallback(
-    (elements: readonly unknown[], appState: unknown, files: unknown) => {
-      if (!onChange) return;
-      if (applyingRemoteRef.current) return;
+  // Local state for what Excalidraw should render. Driven by Y.Map observe.
+  const [renderedElements, setRenderedElements] = useState<ExElement[] | null>(null);
 
-      const rawAppState = (appState as Record<string, unknown>) ?? {};
-      const { collaborators: _collab, ...safeAppState } = rawAppState;
-      void _collab;
-      pendingRef.current = {
-        elements: elements as unknown[],
-        appState: safeAppState,
-        files: files as Record<string, unknown>,
-      };
+  // --------------------------------------------------------------------------
+  // Seed the Y.Map from legacy JSON the first time we load into an empty doc.
+  // --------------------------------------------------------------------------
+  useEffect(() => {
+    if (!ready || !elementsMap || !doc) return;
+    if (elementsMap.size === 0 && seedElements.length > 0) {
+      doc.transact(() => {
+        for (const el of seedElements) elementsMap.set(el.id, el);
+      }, "seed");
+    }
+    // Render whatever the doc now contains.
+    setRenderedElements(readElements(elementsMap));
+  }, [ready, elementsMap, doc, seedElements]);
 
-      const now = Date.now();
-      const elapsed = now - lastFireRef.current;
-      const fire = () => {
-        if (!pendingRef.current) return;
-        lastFireRef.current = Date.now();
-        const p = pendingRef.current;
-        pendingRef.current = null;
-        onChange({ type: "excalidraw", version: 2, source: "trackify", ...p });
-      };
-      if (elapsed >= FRAME_MS) {
-        fire();
-      } else if (!trailingRef.current) {
-        trailingRef.current = setTimeout(() => {
-          trailingRef.current = null;
-          fire();
-        }, FRAME_MS - elapsed);
+  // --------------------------------------------------------------------------
+  // Subscribe to Y.Map changes — when peers (or our own transact) mutate it,
+  // re-render Excalidraw with the merged element list.
+  // --------------------------------------------------------------------------
+  useEffect(() => {
+    if (!elementsMap) return;
+    const listener = () => {
+      const arr = readElements(elementsMap);
+      setRenderedElements(arr);
+      // Push into Excalidraw without causing our own echo.
+      if (apiRef.current) {
+        applyingRemoteRef.current = true;
+        try {
+          apiRef.current.updateScene({ elements: arr as never });
+        } catch {
+          /* scene not ready yet */
+        }
+        // Release the flag on next microtask — Excalidraw will have fired
+        // its onChange by then and we want it ignored.
+        setTimeout(() => { applyingRemoteRef.current = false; }, 0);
       }
+      // Refresh our legacy JSON writer.
+      onChange?.({ type: "excalidraw", version: 2, source: "trackify", elements: arr });
+    };
+    elementsMap.observe(listener);
+    return () => elementsMap.unobserve(listener);
+  }, [elementsMap, onChange]);
+
+  // --------------------------------------------------------------------------
+  // Local -> Y: on Excalidraw change, diff versions and upsert into Y.Map.
+  // --------------------------------------------------------------------------
+  const handleChange = useCallback(
+    (elements: readonly unknown[]) => {
+      if (!doc || !elementsMap) return;
+      if (applyingRemoteRef.current) return; // This tick was a remote apply.
+
+      const arr = elements as ExElement[];
+      const nowVersions = new Map<string, number>();
+      for (const el of arr) nowVersions.set(el.id, el.version);
+
+      // Collect changes.
+      const toUpsert: ExElement[] = [];
+      for (const el of arr) {
+        const prev = lastSentVersionsRef.current.get(el.id);
+        if (prev !== el.version) toUpsert.push(el);
+      }
+      const toDelete: string[] = [];
+      for (const id of lastSentVersionsRef.current.keys()) {
+        if (!nowVersions.has(id)) toDelete.push(id);
+      }
+
+      if (toUpsert.length === 0 && toDelete.length === 0) return;
+
+      doc.transact(() => {
+        for (const el of toUpsert) elementsMap.set(el.id, el);
+        for (const id of toDelete) elementsMap.delete(id);
+      }, "local");
+      lastSentVersionsRef.current = nowVersions;
     },
-    [onChange]
+    [doc, elementsMap],
   );
 
+  // --------------------------------------------------------------------------
+  // Cursor awareness: broadcast our pointer in SCENE coords so peers can place
+  // the cursor correctly regardless of their own pan/zoom.
+  // --------------------------------------------------------------------------
   useEffect(() => {
-    return () => {
-      if (trailingRef.current) clearTimeout(trailingRef.current);
+    if (!provider || !apiRef.current) return;
+    const api = apiRef.current;
+    let raf = 0;
+    let lastX = 0;
+    let lastY = 0;
+    let lastSent = 0;
+
+    const onMove = (e: PointerEvent) => {
+      lastX = e.clientX;
+      lastY = e.clientY;
     };
-  }, []);
 
-  // Apply remote collaborator updates — ONLY elements, so each user keeps
-  // their own tool, zoom, camera position, and selection. Suppress echo via
-  // applyingRemoteRef so our onChange doesn't broadcast the peer's update back.
-  useEffect(() => {
-    if (!remoteUpdate || !apiRef.current) return;
-    applyingRemoteRef.current = true;
-    try {
-      apiRef.current.updateScene({
-        elements: (remoteUpdate.elements ?? []) as never,
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const now = performance.now();
+      if (now - lastSent < 50) return; // 20 updates/sec max
+      lastSent = now;
+
+      const state = api.getAppState?.();
+      if (!state) return;
+      const zoom = state.zoom?.value ?? 1;
+      const scrollX = state.scrollX ?? 0;
+      const scrollY = state.scrollY ?? 0;
+      // Screen → scene
+      const sceneX = lastX / zoom - scrollX;
+      const sceneY = lastY / zoom - scrollY;
+
+      const local = provider.awareness.getLocalState() ?? {};
+      provider.awareness.setLocalState({
+        ...local,
+        cursor: { x: sceneX, y: sceneY, space: "scene" },
       });
-    } catch {
-      // ignore — scene not ready
-    }
-    // Clear the flag after Excalidraw's internal onChange fires.
-    setTimeout(() => { applyingRemoteRef.current = false; }, 50);
-  }, [remoteUpdate]);
+    };
 
-  if (!parsedInitial) {
+    document.addEventListener("pointermove", onMove);
+    raf = requestAnimationFrame(tick);
+    return () => {
+      document.removeEventListener("pointermove", onMove);
+      cancelAnimationFrame(raf);
+    };
+  }, [provider]);
+
+  // --------------------------------------------------------------------------
+  // Render
+  // --------------------------------------------------------------------------
+  if (!ready || !doc || !elementsMap || renderedElements === null) {
     return (
       <div className="flex h-[calc(100dvh-10rem)] w-full items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
-        <span className="text-sm text-zinc-400">Preparing canvas…</span>
+        <span className="text-sm text-zinc-400">Syncing canvas…</span>
       </div>
     );
   }
+
+  // Excalidraw wants a fresh Map() for appState.collaborators every render.
+  const excalidrawInitial = {
+    elements: renderedElements,
+    appState: { collaborators: new Map() },
+    files: {},
+  };
 
   return (
     <div
@@ -154,11 +228,44 @@ export function TldrawWrapper({ initialData, onChange, remoteUpdate }: TldrawWra
     >
       <div className="absolute inset-0">
         <Excalidraw
-          initialData={parsedInitial as never}
+          initialData={excalidrawInitial as never}
           onChange={handleChange}
           excalidrawAPI={(api) => { apiRef.current = api; }}
         />
+        {/* Live cursors in scene-space — transformed back to screen on render. */}
+        {provider && (
+          <CanvasCursors
+            provider={provider}
+            selfUserId={self.userId}
+            getTransform={() => {
+              const state = apiRef.current?.getAppState?.();
+              return {
+                zoom: state?.zoom?.value ?? 1,
+                offsetX: state?.scrollX ?? 0,
+                offsetY: state?.scrollY ?? 0,
+              };
+            }}
+          />
+        )}
       </div>
     </div>
   );
+}
+
+// --------------------------------------------------------------------------
+// Helpers
+// --------------------------------------------------------------------------
+
+function readElements(ymap: Y.Map<ExElement>): ExElement[] {
+  const arr: ExElement[] = [];
+  ymap.forEach((el) => arr.push(el));
+  // Excalidraw expects stable ordering — use the `version` timestamp if present,
+  // falling back to id so peers converge on the same visual stacking order.
+  arr.sort((a, b) => {
+    const va = (a.versionNonce as number | undefined) ?? 0;
+    const vb = (b.versionNonce as number | undefined) ?? 0;
+    if (va !== vb) return va - vb;
+    return String(a.id).localeCompare(String(b.id));
+  });
+  return arr;
 }

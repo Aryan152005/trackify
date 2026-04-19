@@ -97,6 +97,17 @@ export async function deleteEvent(eventId: string) {
   revalidatePath("/calendar");
 }
 
+export async function getEventById(eventId: string) {
+  const { supabase } = await getAuthenticatedUser();
+  const { data: event, error } = await supabase
+    .from("calendar_events")
+    .select("*")
+    .eq("id", eventId)
+    .single();
+  if (error) throw new Error(`Failed to fetch event: ${error.message}`);
+  return event;
+}
+
 export async function getEvents(
   workspaceId: string,
   startDate: string,

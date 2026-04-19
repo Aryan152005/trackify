@@ -3,10 +3,11 @@ import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
-import { format, formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
+import { formatIST, formatISTDate } from "@/lib/utils/datetime";
 import {
   Activity, AlertCircle, AlertTriangle, Info, Clock, Star, MessageSquare,
-  CheckSquare, FileText, StickyNote, Columns3, Bell,
+  CheckSquare, FileText, StickyNote, Columns3, Bell, AtSign, ClipboardList, Megaphone, Mail,
 } from "lucide-react";
 
 export default async function AdminUserDetail({ params }: { params: { id: string } }) {
@@ -53,10 +54,34 @@ export default async function AdminUserDetail({ params }: { params: { id: string
         <StatCard icon={<Clock className="h-4 w-4" />} label="Tracked" value={`${totalMinutes}m`} />
         <StatCard
           icon={<Activity className="h-4 w-4" />}
-          label="Last seen"
-          value={user.lastSignIn ? formatDistanceToNow(new Date(user.lastSignIn), { addSuffix: true }) : "Never"}
+          label="Last active"
+          value={
+            user.lastActivityAt
+              ? formatDistanceToNow(new Date(user.lastActivityAt), { addSuffix: true })
+              : user.lastSignIn
+                ? formatDistanceToNow(new Date(user.lastSignIn), { addSuffix: true }) + " (login)"
+                : "Never"
+          }
           compact
         />
+      </div>
+
+      {/* Auth vs activity detail line */}
+      <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-2 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span>
+            <b>Last login:</b>{" "}
+            {user.lastSignIn ? `${formatIST(user.lastSignIn)} IST` : "Never"}
+          </span>
+          <span>
+            <b>Last activity:</b>{" "}
+            {user.lastActivityAt ? `${formatIST(user.lastActivityAt)} IST` : "No heartbeat recorded"}
+          </span>
+          <span>
+            <b>Joined:</b>{" "}
+            {user.createdAt ? formatISTDate(user.createdAt) : "—"}
+          </span>
+        </div>
       </div>
 
       {/* Health signal */}
@@ -102,7 +127,10 @@ export default async function AdminUserDetail({ params }: { params: { id: string
                     )}
                     <span className="min-w-0 flex-1 truncate text-zinc-800 dark:text-zinc-200">{log.message}</span>
                     <span className="shrink-0 tabular-nums text-xs text-zinc-400">
-                      {format(new Date(log.created_at), "MMM d HH:mm")}
+                      {formatIST(log.created_at, {
+                        month: "short", day: "numeric",
+                        hour: "numeric", minute: "2-digit", hour12: false,
+                      })}
                     </span>
                   </li>
                 );
@@ -184,8 +212,11 @@ export default async function AdminUserDetail({ params }: { params: { id: string
                     )}
                     <p className="mt-1 text-xs text-zinc-400">
                       {t.priority} priority
-                      {t.due_date && ` · due ${t.due_date}`}
-                      {t.completed_at && ` · completed ${format(new Date(t.completed_at), "MMM d")}`}
+                      {t.due_date && ` · due ${t.due_date}${t.due_time ? ` at ${t.due_time} IST` : ""}`}
+                      {t.completed_at && ` · completed ${formatIST(t.completed_at, {
+                        month: "short", day: "numeric",
+                        hour: undefined, minute: undefined, hour12: undefined,
+                      })}`}
                     </p>
                   </div>
                   <StatusPill status={t.status as string} />
@@ -211,7 +242,7 @@ export default async function AdminUserDetail({ params }: { params: { id: string
                 <li key={f.id} className="rounded-lg border border-zinc-100 p-3 dark:border-zinc-800">
                   <div className="flex items-center justify-between text-xs text-zinc-500">
                     <span className="font-semibold uppercase tracking-wide">{f.type}</span>
-                    <span>{format(new Date(f.created_at), "MMM d, yyyy")}</span>
+                    <span>{formatISTDate(f.created_at)}</span>
                   </div>
                   <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">{f.message}</p>
                   {f.rating != null && (
@@ -220,6 +251,76 @@ export default async function AdminUserDetail({ params }: { params: { id: string
                 </li>
               ))}
             </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Notifications received by this user */}
+      {user.notifications.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Bell className="h-4 w-4 text-indigo-500" />
+              Notifications received ({user.notifications.length})
+            </CardTitle>
+            <CardDescription>
+              What the system alerted this user about · {user.notifications.filter((n) => !n.is_read).length} unread
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {user.notifications.slice(0, 20).map((n) => {
+                const TypeIcon =
+                  n.type === "mention" ? AtSign
+                  : n.type === "assignment" ? ClipboardList
+                  : n.type === "reminder" ? Clock
+                  : n.type === "request" ? Mail
+                  : n.type === "nudge" ? Megaphone
+                  : n.type === "comment" ? MessageSquare
+                  : Bell;
+                return (
+                  <li
+                    key={n.id}
+                    className={`rounded-lg border p-3 ${
+                      n.is_read
+                        ? "border-zinc-100 dark:border-zinc-800"
+                        : "border-indigo-200 bg-indigo-50/40 dark:border-indigo-900/50 dark:bg-indigo-950/20"
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <TypeIcon className="mt-0.5 h-4 w-4 shrink-0 text-indigo-500" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                            {n.type}
+                          </span>
+                          <p className="font-medium text-zinc-900 dark:text-zinc-100">{n.title}</p>
+                          {!n.is_read && (
+                            <span className="rounded-full bg-indigo-500 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
+                              unread
+                            </span>
+                          )}
+                        </div>
+                        {n.body && (
+                          <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-600 dark:text-zinc-400">
+                            {truncate(n.body, 240)}
+                          </p>
+                        )}
+                        <p className="mt-1 text-xs text-zinc-400">
+                          {formatIST(n.created_at)} IST
+                          {n.entity_type && ` · ${n.entity_type}`}
+                        </p>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            {user.notifications.length > 20 && (
+              <p className="mt-3 text-center text-xs text-zinc-400">
+                +{user.notifications.length - 20} more notifications
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
@@ -242,7 +343,12 @@ export default async function AdminUserDetail({ params }: { params: { id: string
                       <p className="mt-0.5 text-sm text-zinc-500">{truncate(r.description, 180)}</p>
                     )}
                     <p className="mt-1 text-xs text-zinc-400">
-                      {format(new Date(r.reminder_time), "MMM d, yyyy HH:mm")}
+                      {formatIST(r.reminder_time)} IST
+                      {r.is_recurring && ` · repeats ${r.recurrence_pattern ?? "?"}`}
+                      {r.notified_at && ` · notified ${formatIST(r.notified_at, {
+                        month: "short", day: "numeric",
+                        hour: "numeric", minute: "2-digit", hour12: true,
+                      })}`}
                     </p>
                   </div>
                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
@@ -274,7 +380,10 @@ export default async function AdminUserDetail({ params }: { params: { id: string
                   <li key={p.id} className="flex items-center justify-between rounded border border-zinc-100 px-3 py-2 text-sm dark:border-zinc-800">
                     <span className="truncate">{p.title || "Untitled"}</span>
                     <span className="shrink-0 text-xs text-zinc-400">
-                      {format(new Date(p.updated_at), "MMM d")}
+                      {formatIST(p.updated_at, {
+                        month: "short", day: "numeric",
+                        hour: undefined, minute: undefined, hour12: undefined,
+                      })}
                     </span>
                   </li>
                 ))}
@@ -296,7 +405,10 @@ export default async function AdminUserDetail({ params }: { params: { id: string
                   <li key={b.id} className="flex items-center justify-between rounded border border-zinc-100 px-3 py-2 text-sm dark:border-zinc-800">
                     <span className="truncate">{b.name}</span>
                     <span className="shrink-0 text-xs text-zinc-400">
-                      {format(new Date(b.created_at), "MMM d")}
+                      {formatIST(b.created_at, {
+                        month: "short", day: "numeric",
+                        hour: undefined, minute: undefined, hour12: undefined,
+                      })}
                     </span>
                   </li>
                 ))}

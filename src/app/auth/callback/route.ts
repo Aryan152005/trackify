@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 /**
  * Auth callback: Supabase redirects here after user clicks magic link in email.
- * Exchanges the code for a session and redirects to dashboard.
+ * Exchanges the code for a session and redirects to the dashboard.
  * Redirect URLs must be allowed in Supabase Dashboard → Auth → URL Configuration.
  */
 export async function GET(request: Request) {

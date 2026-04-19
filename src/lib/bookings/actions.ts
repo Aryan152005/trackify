@@ -158,6 +158,41 @@ export async function cancelBooking(bookingId: string) {
   return booking;
 }
 
+/**
+ * Edit a booking's notes. Date/time edits are intentionally not supported
+ * here — changing a booking's window requires a conflict-check pass, which
+ * is safer done by cancelling + re-booking.
+ */
+export async function updateBookingNotes(bookingId: string, notes: string | null) {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  const { data: existing } = await supabase
+    .from("bookings")
+    .select("booked_by, workspace_id")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (!existing) throw new Error("Booking not found");
+
+  if (existing.booked_by !== user.id) {
+    const { data: me } = await supabase
+      .from("workspace_members")
+      .select("role")
+      .eq("workspace_id", existing.workspace_id as string)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!me || (me.role !== "owner" && me.role !== "admin")) {
+      throw new Error("Only the booker or a workspace admin can edit this booking");
+    }
+  }
+
+  const { error } = await supabase
+    .from("bookings")
+    .update({ notes: notes?.trim() || null })
+    .eq("id", bookingId);
+  if (error) throw new Error(`Failed to update booking: ${error.message}`);
+  revalidatePath("/bookings");
+}
+
 export async function getBookings(
   workspaceId: string,
   startDate?: string,

@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import ELK, { type ElkNode } from "elkjs/lib/elk.bundled.js";
 import ReactFlow, {
   Background,
   Controls,
@@ -41,8 +42,10 @@ const KIND_STYLES: Record<EntityKind, { bg: string; border: string; text: string
 
 const KIND_HREF: Record<EntityKind, (rawId: string) => string> = {
   task: (id) => `/tasks/${id}`,
+  // Reminders have no detail page — list view highlights the row.
   reminder: () => `/reminders`,
-  entry: () => `/entries`,
+  // Entries DO have a detail page, so deep-link to it.
+  entry: (id) => `/entries/${id}`,
   page: (id) => `/notes/${id}`,
 };
 
@@ -76,65 +79,101 @@ function SmartNodeCard({ data }: NodeProps<SmartNode>) {
 
 const nodeTypes = { smart: SmartNodeCard };
 
-// ─── Layout: radial cluster by kind ─────────────────────────────
+// ─── Layout: ELK.js layered ─────────────────────────────────────
+//
+// Replaces the old 4-column-by-kind layout. ELK's "layered" algorithm is
+// hierarchical Sugiyama — it:
+//   - stacks parent-child task edges top-to-bottom,
+//   - groups keyword/tag/same-board clusters near each other,
+//   - minimises edge crossings (the "phone-book" problem),
+//   - leaves enough whitespace that long titles don't overlap.
+//
+// It runs asynchronously in the browser (pure JS, no server). We seed it
+// with sensible defaults so the layout is stable across reloads — only
+// structural changes re-shuffle positions.
 
-// Column-per-kind layout — 4 vertical lanes sorted by connection density so
-// highly-connected nodes sit near the middle of their column. Much tidier
-// than a radial burst for ≤50 nodes.
-function layoutNodes(nodes: SmartNode[], edges: SmartGraph["edges"]): Node[] {
-  const byKind: Record<EntityKind, SmartNode[]> = { task: [], reminder: [], entry: [], page: [] };
-  nodes.forEach((n) => byKind[n.kind].push(n));
+const NODE_W = 200;
+const NODE_H = 72;
+const elk = new ELK();
 
-  // Count connections per node so the most linked items anchor each column
-  const degree = new Map<string, number>();
-  edges.forEach((e) => {
-    degree.set(e.source, (degree.get(e.source) ?? 0) + 1);
-    degree.set(e.target, (degree.get(e.target) ?? 0) + 1);
+async function layoutWithElk(
+  nodes: SmartNode[],
+  edges: SmartGraph["edges"],
+): Promise<Node[]> {
+  if (nodes.length === 0) return [];
+  const graph: ElkNode = {
+    id: "root",
+    layoutOptions: {
+      "elk.algorithm": "layered",
+      "elk.direction": "DOWN",
+      "elk.layered.spacing.nodeNodeBetweenLayers": "60",
+      "elk.spacing.nodeNode": "40",
+      "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
+      "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
+    },
+    children: nodes.map((n) => ({
+      id: n.id,
+      width: NODE_W,
+      height: NODE_H,
+    })),
+    edges: edges.map((e) => ({
+      id: e.id,
+      sources: [e.source],
+      targets: [e.target],
+    })),
+  };
+
+  const laid = await elk.layout(graph);
+  const positions = new Map<string, { x: number; y: number }>();
+  (laid.children ?? []).forEach((c) => {
+    positions.set(c.id, { x: c.x ?? 0, y: c.y ?? 0 });
   });
-  const kindOrder: EntityKind[] = ["entry", "task", "reminder", "page"]; // left → right
-  const COL_WIDTH = 300;
-  const ROW_HEIGHT = 110;
-  const result: Node[] = [];
 
-  kindOrder.forEach((kind, colIdx) => {
-    const group = byKind[kind]
-      .slice()
-      .sort((a, b) => (degree.get(b.id) ?? 0) - (degree.get(a.id) ?? 0));
-    if (group.length === 0) return;
-    // Center each column vertically around y=0, spaced by ROW_HEIGHT
-    const startY = -((group.length - 1) * ROW_HEIGHT) / 2;
-    group.forEach((n, i) => {
-      result.push({
-        id: n.id,
-        type: "smart",
-        position: {
-          x: colIdx * COL_WIDTH,
-          y: startY + i * ROW_HEIGHT,
-        },
-        data: n,
-      });
-    });
-  });
-
-  return result;
+  return nodes.map((n) => ({
+    id: n.id,
+    type: "smart",
+    position: positions.get(n.id) ?? { x: 0, y: 0 },
+    data: n,
+  }));
 }
 
+// Edge style per kind — each relationship gets a distinct visual so the graph
+// reads like a legend. FK-type edges (parent-child, task-reminder) are bold
+// solid lines; inferred edges (keyword, same-day) are thinner and dashier.
+const EDGE_STYLE: Record<
+  SmartGraph["edges"][number]["kind"],
+  { stroke: string; dash?: string; animated: boolean }
+> = {
+  "parent-child": { stroke: "#0ea5e9", animated: false },
+  "task-reminder": { stroke: "#f59e0b", animated: false },
+  "same-board": { stroke: "#8b5cf6", animated: false },
+  "shared-tag": { stroke: "#10b981", animated: false },
+  "keyword": { stroke: "#6366f1", animated: true },
+  "same-day": { stroke: "#71717a", dash: "4 4", animated: false },
+};
+
 function mapEdges(edges: SmartGraph["edges"]): Edge[] {
-  return edges.map((e) => ({
-    id: e.id,
-    source: e.source,
-    target: e.target,
-    type: "smoothstep",
-    animated: e.kind === "keyword",
-    label: e.label,
-    labelStyle: { fontSize: 10, fill: "#71717a" },
-    labelBgStyle: { fill: "rgba(255,255,255,0.8)" },
-    style: {
-      stroke: e.kind === "same-day" ? "#f59e0b" : e.kind === "keyword" ? "#6366f1" : "#71717a",
-      strokeWidth: 1 + e.strength * 1.5,
-      strokeDasharray: e.kind === "same-day" ? "4 4" : undefined,
-    },
-  }));
+  return edges.map((e) => {
+    const s = EDGE_STYLE[e.kind];
+    return {
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      type: "smoothstep",
+      animated: s.animated,
+      label: e.label,
+      labelStyle: { fontSize: 10, fill: "#71717a" },
+      labelBgStyle: { fill: "rgba(255,255,255,0.8)" },
+      // Surfaced via the native SVG title so browsers show it on hover —
+      // cheap "why does this edge exist" tooltip without custom DOM.
+      data: { reason: e.reason ?? "" },
+      style: {
+        stroke: s.stroke,
+        strokeWidth: 1 + e.strength * 1.5,
+        strokeDasharray: s.dash,
+      },
+    };
+  });
 }
 
 // ─── Main component ──────────────────────────────────────────────
@@ -158,16 +197,64 @@ export function SmartMindMap({ graph, workspaceId }: Props) {
     entry: true,
     page: true,
   });
-  const [showEdgeKinds, setShowEdgeKinds] = useState({ keyword: true, "same-day": true });
+  const [showEdgeKinds, setShowEdgeKinds] = useState<
+    Record<SmartGraph["edges"][number]["kind"], boolean>
+  >({
+    "parent-child": true,
+    "task-reminder": true,
+    "same-board": true,
+    "shared-tag": true,
+    "keyword": true,
+    "same-day": true,
+  });
 
   // Hover state — node id that's currently hovered; neighbors get highlighted, others dim
   const [hoverId, setHoverId] = useState<string | null>(null);
 
-  // Filtered view of graph based on toggles
-  const visibleNodes = useMemo(
-    () => graph.nodes.filter((n) => showKinds[n.kind]),
-    [graph.nodes, showKinds]
-  );
+  // Date-window filter — scope visible nodes to a time range. Defaults to
+  // "all" so users see the full graph on first paint; they can narrow with
+  // one click. "today"/"week"/"month" check any date field on a node
+  // (due_date / reminder_time / entry_date); nodes without a date stay in
+  // "all" only.
+  type DateWindow = "all" | "today" | "week" | "month";
+  const [dateWindow, setDateWindow] = useState<DateWindow>("all");
+
+  // Live title search — pure substring match on node titles. Empty string
+  // means "no filter" so typing is additive, not destructive.
+  const [search, setSearch] = useState("");
+
+  // Pre-compute window bounds once per dateWindow change.
+  const windowBounds = useMemo(() => {
+    if (dateWindow === "all") return null;
+    const now = new Date();
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(now);
+    end.setHours(23, 59, 59, 999);
+    if (dateWindow === "week") end.setDate(end.getDate() + 6);
+    else if (dateWindow === "month") end.setMonth(end.getMonth() + 1);
+    return { start, end };
+  }, [dateWindow]);
+
+  function nodeInWindow(n: SmartNode): boolean {
+    if (!windowBounds) return true;
+    const raw = n.due_date ?? n.reminder_time ?? n.entry_date;
+    if (!raw) return false; // no date on node → excluded from narrower windows
+    const d = new Date(raw);
+    return d >= windowBounds.start && d <= windowBounds.end;
+  }
+
+  // Filtered view of graph based on ALL active filters (kind, date, search).
+  const visibleNodes = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return graph.nodes.filter((n) => {
+      if (!showKinds[n.kind]) return false;
+      if (!nodeInWindow(n)) return false;
+      if (needle && !n.title.toLowerCase().includes(needle)) return false;
+      return true;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph.nodes, showKinds, windowBounds, search]);
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((n) => n.id)), [visibleNodes]);
   const visibleEdges = useMemo(
     () =>
@@ -175,7 +262,7 @@ export function SmartMindMap({ graph, workspaceId }: Props) {
         (e) =>
           visibleNodeIds.has(e.source) &&
           visibleNodeIds.has(e.target) &&
-          showEdgeKinds[e.kind as keyof typeof showEdgeKinds]
+          showEdgeKinds[e.kind]
       ),
     [graph.edges, visibleNodeIds, showEdgeKinds]
   );
@@ -192,15 +279,26 @@ export function SmartMindMap({ graph, workspaceId }: Props) {
     return map;
   }, [visibleEdges]);
 
+  // ELK runs async — compute positions whenever the set of visible nodes or
+  // edges changes structurally. Hover highlighting is applied separately on
+  // top of the laid-out positions so a hover doesn't trigger a re-layout.
+  const [laidNodes, setLaidNodes] = useState<Node[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    layoutWithElk(visibleNodes, visibleEdges).then((result) => {
+      if (!cancelled) setLaidNodes(result);
+    });
+    return () => { cancelled = true; };
+  }, [visibleNodes, visibleEdges]);
+
   const rfNodes = useMemo(() => {
-    const laid = layoutNodes(visibleNodes, visibleEdges);
-    if (!hoverId) return laid;
+    if (!hoverId) return laidNodes;
     const highlighted = new Set([hoverId, ...(neighbours.get(hoverId) ?? [])]);
-    return laid.map((n) => ({
+    return laidNodes.map((n) => ({
       ...n,
       style: { opacity: highlighted.has(n.id) ? 1 : 0.25, transition: "opacity 150ms" },
     }));
-  }, [visibleNodes, visibleEdges, hoverId, neighbours]);
+  }, [laidNodes, hoverId, neighbours]);
 
   const rfEdges = useMemo(() => {
     const mapped = mapEdges(visibleEdges);
@@ -304,9 +402,59 @@ export function SmartMindMap({ graph, workspaceId }: Props) {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Filter graph</CardTitle>
-            <CardDescription className="text-xs">Hide/show entity types and connection kinds.</CardDescription>
+            <CardDescription className="text-xs">
+              Narrow by kind, date, or keyword. Changes apply instantly.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-3">
+            {/* Search — live substring match on node titles. */}
+            <div>
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Search
+              </label>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Filter by title…"
+                className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-xs text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/30 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+              />
+            </div>
+
+            {/* Date window — "today / week / month / all". */}
+            <div>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Date window
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {(["today", "week", "month", "all"] as const).map((w) => (
+                  <button
+                    key={w}
+                    type="button"
+                    onClick={() => setDateWindow(w)}
+                    className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition ${
+                      dateWindow === w
+                        ? "border-indigo-400 bg-indigo-50 text-indigo-700 dark:border-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-300"
+                        : "border-zinc-300 bg-white text-zinc-600 hover:border-indigo-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400"
+                    }`}
+                  >
+                    {w === "today" ? "Today"
+                    : w === "week" ? "This week"
+                    : w === "month" ? "This month"
+                    : "All time"}
+                  </button>
+                ))}
+              </div>
+              {dateWindow !== "all" && (
+                <p className="mt-1 text-[10px] text-zinc-400 dark:text-zinc-500">
+                  Hiding nodes without a date. Showing {visibleNodes.length} of {graph.nodes.length}.
+                </p>
+              )}
+            </div>
+
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Kinds
+            </p>
             <div className="grid grid-cols-2 gap-1.5">
               <ToggleChip
                 active={showKinds.task}
@@ -339,15 +487,39 @@ export function SmartMindMap({ graph, workspaceId }: Props) {
               </p>
               <div className="grid grid-cols-2 gap-1.5">
                 <ToggleChip
+                  active={showEdgeKinds["parent-child"]}
+                  onClick={() => setShowEdgeKinds((s) => ({ ...s, "parent-child": !s["parent-child"] }))}
+                  color="bg-sky-500"
+                  label="Subtasks"
+                />
+                <ToggleChip
+                  active={showEdgeKinds["task-reminder"]}
+                  onClick={() => setShowEdgeKinds((s) => ({ ...s, "task-reminder": !s["task-reminder"] }))}
+                  color="bg-amber-500"
+                  label="Task↔reminder"
+                />
+                <ToggleChip
+                  active={showEdgeKinds["same-board"]}
+                  onClick={() => setShowEdgeKinds((s) => ({ ...s, "same-board": !s["same-board"] }))}
+                  color="bg-purple-500"
+                  label="Same board"
+                />
+                <ToggleChip
+                  active={showEdgeKinds["shared-tag"]}
+                  onClick={() => setShowEdgeKinds((s) => ({ ...s, "shared-tag": !s["shared-tag"] }))}
+                  color="bg-emerald-500"
+                  label="Shared tag"
+                />
+                <ToggleChip
                   active={showEdgeKinds.keyword}
                   onClick={() => setShowEdgeKinds((s) => ({ ...s, keyword: !s.keyword }))}
-                  color="bg-indigo-400"
+                  color="bg-indigo-500"
                   label="Keyword"
                 />
                 <ToggleChip
                   active={showEdgeKinds["same-day"]}
                   onClick={() => setShowEdgeKinds((s) => ({ ...s, "same-day": !s["same-day"] }))}
-                  color="bg-amber-400"
+                  color="bg-zinc-400"
                   label="Same day"
                 />
               </div>

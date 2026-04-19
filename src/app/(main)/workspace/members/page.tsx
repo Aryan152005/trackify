@@ -16,6 +16,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { EmailPreviewDialog } from "@/components/admin/email-preview-dialog";
 import type { RenderedEmail } from "@/lib/admin/preview-actions";
@@ -55,6 +56,13 @@ export default function WorkspaceMembersPage() {
   const [actionId, setActionId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+
+  // Confirm-dialog state for destructive member/invitation actions.
+  const [confirmRevoke, setConfirmRevoke] = useState<PendingInvitation | null>(null);
+  const [confirmRoleChange, setConfirmRoleChange] = useState<
+    { member: MemberRow; newRole: "admin" | "editor" | "viewer" } | null
+  >(null);
+  const [confirmRemove, setConfirmRemove] = useState<MemberRow | null>(null);
 
   const loadAll = useCallback(async () => {
     if (!workspace) return;
@@ -173,9 +181,12 @@ export default function WorkspaceMembersPage() {
     setActionId(null);
   }
 
-  async function handleRevoke(inv: PendingInvitation) {
+  function handleRevoke(inv: PendingInvitation) {
+    setConfirmRevoke(inv);
+  }
+
+  async function performRevoke(inv: PendingInvitation) {
     if (!workspace) return;
-    if (!confirm(`Revoke invitation for ${inv.email}?`)) return;
     setActionId(inv.id);
     try {
       await revokeInvitation(inv.id, workspace.id);
@@ -213,13 +224,17 @@ export default function WorkspaceMembersPage() {
     }
   }
 
-  async function handleRoleChange(memberId: string, role: "admin" | "editor" | "viewer") {
+  function handleRoleChange(memberId: string, role: "admin" | "editor" | "viewer") {
     const target = members.find((m) => m.id === memberId);
     if (!target) return;
-    const ok = confirm(`Change ${target.name}'s role to ${role}?`);
-    if (!ok) return;
+    // No-op if they already have this role (the Select can fire on open in some UAs).
+    if (target.role === role) return;
+    setConfirmRoleChange({ member: target, newRole: role });
+  }
+
+  async function performRoleChange(target: MemberRow, role: "admin" | "editor" | "viewer") {
     try {
-      await updateMemberRole(memberId, role);
+      await updateMemberRole(target.id, role);
       toast.success(`${target.name} is now ${role}`);
       loadAll();
     } catch (err) {
@@ -227,12 +242,15 @@ export default function WorkspaceMembersPage() {
     }
   }
 
-  async function handleRemove(memberId: string) {
+  function handleRemove(memberId: string) {
     const target = members.find((m) => m.id === memberId);
     if (!target) return;
-    if (!confirm(`Remove ${target.name} from this workspace? They'll lose access to everything.`)) return;
+    setConfirmRemove(target);
+  }
+
+  async function performRemove(target: MemberRow) {
     try {
-      await removeMember(memberId);
+      await removeMember(target.id);
       toast.success(`${target.name} removed`);
       loadAll();
     } catch (err) {
@@ -454,6 +472,62 @@ export default function WorkspaceMembersPage() {
         open={!!previewPayload}
         onOpenChange={(o) => !o && setPreviewPayload(null)}
         payload={previewPayload}
+      />
+
+      <ConfirmDialog
+        open={!!confirmRevoke}
+        onOpenChange={(next) => !next && setConfirmRevoke(null)}
+        title="Revoke this invitation?"
+        description={
+          confirmRevoke
+            ? `${confirmRevoke.email} will no longer be able to accept this invite. You can re-invite them later.`
+            : ""
+        }
+        confirmLabel="Revoke"
+        cancelLabel="Keep"
+        variant="danger"
+        onConfirm={() => {
+          const inv = confirmRevoke;
+          setConfirmRevoke(null);
+          if (inv) performRevoke(inv);
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!confirmRoleChange}
+        onOpenChange={(next) => !next && setConfirmRoleChange(null)}
+        title="Change role?"
+        description={
+          confirmRoleChange
+            ? `${confirmRoleChange.member.name} (currently ${confirmRoleChange.member.role}) will become ${confirmRoleChange.newRole}.`
+            : ""
+        }
+        confirmLabel="Change role"
+        cancelLabel="Cancel"
+        onConfirm={() => {
+          const c = confirmRoleChange;
+          setConfirmRoleChange(null);
+          if (c) performRoleChange(c.member, c.newRole);
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!confirmRemove}
+        onOpenChange={(next) => !next && setConfirmRemove(null)}
+        title="Remove from workspace?"
+        description={
+          confirmRemove
+            ? `${confirmRemove.name} will lose access to every page, board, task, and note in this workspace. This can be reversed only by re-inviting them.`
+            : ""
+        }
+        confirmLabel="Remove"
+        cancelLabel="Keep"
+        variant="danger"
+        onConfirm={() => {
+          const m = confirmRemove;
+          setConfirmRemove(null);
+          if (m) performRemove(m);
+        }}
       />
     </div>
   );

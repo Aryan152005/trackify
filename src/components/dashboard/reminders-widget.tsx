@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { format, parseISO } from "date-fns";
 import { Bell } from "lucide-react";
+import { formatIST, formatISTTime, istDateKey } from "@/lib/utils/datetime";
 import type { Reminder } from "@/lib/types/database";
 
 interface RemindersWidgetProps {
@@ -45,8 +45,7 @@ export function RemindersWidget({ reminders }: RemindersWidgetProps) {
       <CardContent>
         <div className="space-y-3">
           {reminders.map((reminder) => {
-            const reminderDate = parseISO(reminder.reminder_time);
-            const isToday = format(reminderDate, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd");
+            const isToday = istDateKey(reminder.reminder_time) === istDateKey(new Date());
             return (
               <div
                 key={reminder.id}
@@ -54,7 +53,16 @@ export function RemindersWidget({ reminders }: RemindersWidgetProps) {
               >
                 <p className="font-medium text-zinc-900 dark:text-zinc-100">{reminder.title}</p>
                 <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-                  {isToday ? "Today" : format(reminderDate, "MMM d")} at {format(reminderDate, "h:mm a")}
+                  {isToday
+                    ? "Today"
+                    : formatIST(reminder.reminder_time, {
+                        month: "short",
+                        day: "numeric",
+                        hour: undefined,
+                        minute: undefined,
+                        hour12: undefined,
+                      })}{" "}
+                  at {formatISTTime(reminder.reminder_time)} IST
                 </p>
               </div>
             );

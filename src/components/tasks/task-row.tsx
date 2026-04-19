@@ -1,18 +1,21 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { format, parseISO } from "date-fns";
-import { Check, Pencil, Trash2, Loader2, ExternalLink } from "lucide-react";
+import { Check, Pencil, Trash2, Loader2, ExternalLink, Bell } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
+import { TaskReminderButton } from "@/components/tasks/task-reminder-button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { updateTaskStatus, updateTask, deleteTask } from "@/lib/tasks/actions";
 import { TaskLabels } from "@/components/tasks/task-labels";
+import { AuthorBadge } from "@/components/collaboration/author-badge";
+import { createClient } from "@/lib/supabase/client";
 import type { Task, TaskPriority } from "@/lib/types/database";
 import type { Label } from "@/lib/types/board";
 
@@ -30,6 +33,19 @@ export function TaskRow({ task, completed = false, selected, onToggleSelect }: P
   const [optimisticDone, setOptimisticDone] = useState(completed);
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Resolve current user so we can show an author badge only on tasks created
+  // by someone else (workspace-shared). One fetch per mounted component is
+  // fine — auth.getUser() is cache-backed in the Supabase client.
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    createClient().auth.getUser().then(({ data }) => {
+      if (cancelled) return;
+      setCurrentUserId(data.user?.id ?? null);
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   // Edit-form state
   const [title, setTitle] = useState(task.title);
@@ -195,6 +211,11 @@ export function TaskRow({ task, completed = false, selected, onToggleSelect }: P
             </h3>
             {!optimisticDone && <TaskStatusBadge status={task.status} />}
             {!optimisticDone && <TaskPriorityBadge priority={task.priority} />}
+            <AuthorBadge
+              userId={task.user_id}
+              currentUserId={currentUserId}
+              prefix="by"
+            />
           </div>
           {task.description && (
             <p className="mt-0.5 truncate text-sm text-zinc-600 dark:text-zinc-400">{task.description}</p>
@@ -219,6 +240,17 @@ export function TaskRow({ task, completed = false, selected, onToggleSelect }: P
 
         {/* Actions (visible on hover / always on touch) */}
         <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+          <TaskReminderButton
+            task={{
+              id: task.id,
+              title: task.title,
+              description: task.description,
+              due_date: task.due_date,
+              due_time: task.due_time,
+              workspace_id: task.workspace_id,
+            }}
+            compact
+          />
           <Link
             href={`/tasks/${task.id}`}
             className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700 dark:hover:bg-zinc-700 dark:hover:text-zinc-100"

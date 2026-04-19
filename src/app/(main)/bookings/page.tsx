@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspaceId, useRequireRole } from "@/lib/workspace/hooks";
 import {
@@ -8,6 +9,7 @@ import {
   deleteResource,
   createBooking,
   cancelBooking,
+  updateBookingNotes,
   getBookings,
   getResources,
 } from "@/lib/bookings/actions";
@@ -18,6 +20,7 @@ import {
 } from "@/components/ui/animated-layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { BookingForm } from "@/components/bookings/booking-form";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Ticket } from "lucide-react";
@@ -33,6 +36,9 @@ import {
   Clock,
   X,
   Filter,
+  Pencil,
+  Loader2,
+  Check,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import type { BookableResource, Booking } from "@/lib/types/calendar";
@@ -75,6 +81,11 @@ export default function BookingsPage() {
   >("room");
   const [newResourceDescription, setNewResourceDescription] = useState("");
   const [addingResource, setAddingResource] = useState(false);
+  const [deletingResourceId, setDeletingResourceId] = useState<string | null>(null);
+  const [cancellingBooking, setCancellingBooking] = useState<Booking | null>(null);
+  const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
+  const [editNotesDraft, setEditNotesDraft] = useState("");
+  const [savingNotes, setSavingNotes] = useState(false);
 
   const supabase = createClient();
 
@@ -128,11 +139,18 @@ export default function BookingsPage() {
     }
   }
 
-  async function handleDeleteResource(resourceId: string) {
-    if (!window.confirm("Delete this resource? All related bookings will also be removed."))
-      return;
-    await deleteResource(resourceId);
-    await loadData();
+  function handleDeleteResource(resourceId: string) {
+    setDeletingResourceId(resourceId);
+  }
+
+  async function confirmDeleteResource() {
+    if (!deletingResourceId) return;
+    try {
+      await deleteResource(deletingResourceId);
+      await loadData();
+    } finally {
+      setDeletingResourceId(null);
+    }
   }
 
   async function handleBookResource(data: {
@@ -153,9 +171,31 @@ export default function BookingsPage() {
     await loadData();
   }
 
-  async function handleCancelBooking(bookingId: string) {
-    await cancelBooking(bookingId);
-    await loadData();
+  async function performCancelBooking(bookingId: string) {
+    try {
+      await cancelBooking(bookingId);
+      await loadData();
+    } finally {
+      setCancellingBooking(null);
+    }
+  }
+
+  function handleStartEditNotes(booking: Booking) {
+    setEditingBooking(booking);
+    setEditNotesDraft(booking.notes ?? "");
+  }
+
+  async function handleSaveNotes() {
+    if (!editingBooking) return;
+    setSavingNotes(true);
+    try {
+      await updateBookingNotes(editingBooking.id, editNotesDraft);
+      await loadData();
+      setEditingBooking(null);
+      setEditNotesDraft("");
+    } finally {
+      setSavingNotes(false);
+    }
   }
 
   // Filtering
@@ -484,14 +524,25 @@ export default function BookingsPage() {
                         </td>
                         <td className="py-3 text-right">
                           {isOwn && booking.status !== "cancelled" && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleCancelBooking(booking.id)}
-                              className="text-red-500 hover:text-red-600"
-                            >
-                              Cancel
-                            </Button>
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditNotes(booking)}
+                                className="rounded p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                                title="Edit notes"
+                                aria-label="Edit booking notes"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setCancellingBooking(booking)}
+                                className="text-red-500 hover:text-red-600"
+                              >
+                                Cancel
+                              </Button>
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -503,6 +554,75 @@ export default function BookingsPage() {
           )}
         </section>
       </div>
+
+      <ConfirmDialog
+        open={!!deletingResourceId}
+        onOpenChange={(next) => !next && setDeletingResourceId(null)}
+        title="Delete this resource?"
+        description="All related bookings will also be removed. This can't be undone."
+        confirmLabel="Delete resource"
+        cancelLabel="Keep"
+        variant="danger"
+        onConfirm={confirmDeleteResource}
+      />
+
+      <ConfirmDialog
+        open={!!cancellingBooking}
+        onOpenChange={(next) => !next && setCancellingBooking(null)}
+        title="Cancel this booking?"
+        description={
+          cancellingBooking
+            ? `Your reservation for "${resourceMap.get(cancellingBooking.resource_id)?.name ?? "Unknown"}" will be released and available for others to book.`
+            : ""
+        }
+        confirmLabel="Cancel booking"
+        cancelLabel="Keep"
+        variant="danger"
+        onConfirm={() => {
+          const id = cancellingBooking?.id;
+          if (id) performCancelBooking(id);
+        }}
+      />
+
+      {/* Edit booking notes */}
+      <Dialog.Root open={!!editingBooking} onOpenChange={(next) => !next && setEditingBooking(null)}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in" />
+          <Dialog.Content className="sheet-on-mobile fixed left-1/2 top-1/2 z-50 w-[90vw] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border border-zinc-200 bg-white p-5 shadow-lg data-[state=open]:animate-in data-[state=open]:fade-in data-[state=open]:zoom-in-95 dark:border-zinc-800 dark:bg-zinc-900">
+            <Dialog.Title className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+              Edit booking notes
+            </Dialog.Title>
+            <Dialog.Description className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              To change the booking time, cancel this booking and create a new one.
+            </Dialog.Description>
+            <textarea
+              rows={5}
+              value={editNotesDraft}
+              onChange={(e) => setEditNotesDraft(e.target.value)}
+              placeholder="Add notes for this booking…"
+              className="mt-3 w-full resize-y rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+            />
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditingBooking(null)}
+                disabled={savingNotes}
+              >
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleSaveNotes} disabled={savingNotes}>
+                {savingNotes ? (
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Check className="mr-1 h-3.5 w-3.5" />
+                )}
+                Save notes
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </AnimatedPage>
   );
 }

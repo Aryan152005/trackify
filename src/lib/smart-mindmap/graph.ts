@@ -1,6 +1,11 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import { tokenize, jaccard, sameDay } from "@/lib/smart-mindmap/text-utils";
+import {
+  tokenize,
+  computeIdf,
+  weightedSimilarity,
+  sameDay,
+} from "@/lib/smart-mindmap/text-utils";
 
 // ─────────────────────────────────────────────────────────────
 // Types exposed to the client
@@ -20,9 +25,19 @@ export interface SmartNode {
   is_completed?: boolean;
   is_overdue?: boolean;
   status?: string | null;
+  /** For tasks: denormalised board name if the task lives on a board. */
+  board_name?: string | null;
+  /** For tasks: the parent_task_id, if any — used by the layered layout. */
+  parent_id?: string | null;
 }
 
-export type EdgeKind = "shared-tag" | "keyword" | "same-day" | "mentions";
+export type EdgeKind =
+  | "keyword"
+  | "same-day"
+  | "shared-tag"
+  | "parent-child"
+  | "same-board"
+  | "task-reminder";
 
 export interface SmartEdge {
   id: string;
@@ -31,6 +46,8 @@ export interface SmartEdge {
   kind: EdgeKind;
   label: string;
   strength: number; // 0..1
+  /** Short human reason the edge exists — shown on hover. */
+  reason?: string;
 }
 
 export type SuggestionKind =
@@ -44,11 +61,9 @@ export interface Suggestion {
   kind: SuggestionKind;
   title: string;
   detail: string;
-  // Primary entity the action targets
   taskId?: string;
   reminderId?: string;
   entryId?: string;
-  // For "create-*" actions, hints passed to the new-form
   prefillTitle?: string;
   prefillDate?: string | null;
   prefillTime?: string | null;
@@ -66,7 +81,11 @@ export interface SmartGraph {
 
 const NODE_CAP = 50;
 const ENTRY_LOOKBACK_DAYS = 14;
-const MAX_EDGES_PER_NODE = 5;
+const MAX_EDGES_PER_NODE = 6;
+// Minimum TF-IDF similarity for a keyword edge. Tuned so that
+// items sharing 2 rare tokens easily clear the bar, but items sharing
+// only common words do not.
+const KEYWORD_MIN_SCORE = 0.12;
 
 export async function buildSmartGraph(workspaceId: string | null): Promise<SmartGraph> {
   const supabase = await createClient();
@@ -79,14 +98,16 @@ export async function buildSmartGraph(workspaceId: string | null): Promise<Smart
   // Fetch in parallel. Scope by workspace when available.
   const tasksQuery = supabase
     .from("tasks")
-    .select("id, title, description, due_date, due_time, status, priority, updated_at")
+    .select(
+      "id, title, description, due_date, due_time, status, priority, parent_task_id, board_id, column_id, labels, updated_at",
+    )
     .eq("user_id", user.id)
     .neq("status", "done")
     .order("updated_at", { ascending: false })
     .limit(25);
   const remindersQuery = supabase
     .from("reminders")
-    .select("id, title, description, reminder_time, is_completed")
+    .select("id, title, description, reminder_time, is_completed, entity_type, entity_id")
     .eq("user_id", user.id)
     .eq("is_completed", false)
     .order("reminder_time", { ascending: true })
@@ -121,21 +142,39 @@ export async function buildSmartGraph(workspaceId: string | null): Promise<Smart
   ]);
   const pages = (pagesResult as { data: { id: string; title: string; content: unknown; updated_at: string }[] | null }).data ?? [];
 
-  // ── Build nodes
+  // Collateral: board names (for subtitle enrichment) and entry tags (for shared-tag edges).
+  const boardIds = Array.from(new Set((tasks ?? []).map((t) => t.board_id as string | null).filter(Boolean))) as string[];
+  const entryIds = (entries ?? []).map((e) => e.id as string);
+  const [boardsResult, entryTagsResult] = await Promise.all([
+    boardIds.length > 0
+      ? supabase.from("boards").select("id, name").in("id", boardIds)
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    entryIds.length > 0
+      ? supabase.from("entry_tags").select("entry_id, tag_id").in("entry_id", entryIds)
+      : Promise.resolve({ data: [] as { entry_id: string; tag_id: string }[] }),
+  ]);
+  const boards = ((boardsResult as { data: { id: string; name: string }[] | null }).data) ?? [];
+  const entryTagRows = ((entryTagsResult as { data: { entry_id: string; tag_id: string }[] | null }).data) ?? [];
+  const boardNameById = new Map(boards.map((b) => [b.id, b.name]));
+
+  // Build nodes ───────────────────────────────────────────────
   const nodes: SmartNode[] = [];
 
   (tasks ?? []).forEach((t) => {
     const due = t.due_date ? new Date(t.due_date as string) : null;
+    const boardName = t.board_id ? boardNameById.get(t.board_id as string) ?? null : null;
     nodes.push({
       id: `task-${t.id}`,
       kind: "task",
       title: t.title as string,
       subtitle: t.due_date
-        ? `Due ${(t.due_date as string).slice(5)} · ${t.priority ?? "?"}`
-        : `No due date · ${t.priority ?? "?"}`,
+        ? `Due ${(t.due_date as string).slice(5)} · ${t.priority ?? "?"}${boardName ? ` · ${boardName}` : ""}`
+        : `No due date · ${t.priority ?? "?"}${boardName ? ` · ${boardName}` : ""}`,
       due_date: t.due_date as string | null,
       status: t.status as string,
       is_overdue: !!(due && due < now && t.status !== "done"),
+      board_name: boardName,
+      parent_id: (t.parent_task_id as string | null) ?? null,
     });
   });
 
@@ -145,7 +184,9 @@ export async function buildSmartGraph(workspaceId: string | null): Promise<Smart
       id: `reminder-${r.id}`,
       kind: "reminder",
       title: r.title as string,
-      subtitle: when ? when.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "",
+      subtitle: when
+        ? when.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+        : "",
       reminder_time: r.reminder_time as string | null,
       is_completed: !!r.is_completed,
       is_overdue: !!(when && when < now && !r.is_completed),
@@ -172,7 +213,7 @@ export async function buildSmartGraph(workspaceId: string | null): Promise<Smart
     });
   });
 
-  // Cap total nodes (keep diversity: take proportional share from each kind)
+  // Cap total nodes (keep diversity — proportional share per kind)
   let finalNodes = nodes;
   if (nodes.length > NODE_CAP) {
     const tasksSlice = nodes.filter((n) => n.kind === "task").slice(0, 18);
@@ -182,58 +223,164 @@ export async function buildSmartGraph(workspaceId: string | null): Promise<Smart
     finalNodes = [...tasksSlice, ...remindersSlice, ...entriesSlice, ...pagesSlice];
   }
 
-  // Pre-tokenize titles + descriptions
+  const keepIds = new Set(finalNodes.map((n) => n.id));
+
+  // ── Tokens (titles + descriptions) ─────────────────────────
   const tokens = new Map<string, Set<string>>();
-  finalNodes.forEach((n) => {
-    tokens.set(n.id, tokenize(n.title));
-  });
-  // Enrich token sets with descriptions / page content text if useful
+  finalNodes.forEach((n) => tokens.set(n.id, tokenize(n.title)));
   (tasks ?? []).forEach((t) => {
     const id = `task-${t.id}`;
-    const existing = tokens.get(id);
-    if (!existing) return;
-    tokenize(t.description as string | null).forEach((w) => existing.add(w));
+    const ts = tokens.get(id);
+    if (!ts) return;
+    tokenize(t.description as string | null).forEach((w) => ts.add(w));
   });
   (reminders ?? []).forEach((r) => {
     const id = `reminder-${r.id}`;
-    const existing = tokens.get(id);
-    if (!existing) return;
-    tokenize(r.description as string | null).forEach((w) => existing.add(w));
+    const ts = tokens.get(id);
+    if (!ts) return;
+    tokenize(r.description as string | null).forEach((w) => ts.add(w));
   });
   (entries ?? []).forEach((e) => {
     const id = `entry-${e.id}`;
-    const existing = tokens.get(id);
-    if (!existing) return;
-    tokenize(e.description as string | null).forEach((w) => existing.add(w));
-    tokenize(e.work_done as string | null).forEach((w) => existing.add(w));
+    const ts = tokens.get(id);
+    if (!ts) return;
+    tokenize(e.description as string | null).forEach((w) => ts.add(w));
+    tokenize(e.work_done as string | null).forEach((w) => ts.add(w));
   });
 
-  // ── Build edges
+  // TF-IDF weights over THIS user's corpus. Common words (meeting, todo) get
+  // crushed; rare ones (kubernetes, RLS) dominate — exactly what we want.
+  const idf = computeIdf(tokens);
+
+  // ── Build edges ────────────────────────────────────────────
   const candidateEdges: SmartEdge[] = [];
+
+  // FK edges first — these are deterministic facts, never false positives.
+  //
+  // 1. Parent-child task hierarchy.
+  (tasks ?? []).forEach((t) => {
+    const childId = `task-${t.id}`;
+    const parentRaw = t.parent_task_id as string | null;
+    if (!parentRaw) return;
+    const parentId = `task-${parentRaw}`;
+    if (!keepIds.has(childId) || !keepIds.has(parentId)) return;
+    candidateEdges.push({
+      id: `e-${parentId}-${childId}-parent`,
+      source: parentId,
+      target: childId,
+      kind: "parent-child",
+      label: "subtask",
+      strength: 1,
+      reason: "Parent task → subtask",
+    });
+  });
+
+  // 2. Same-board (and ideally same-column) grouping. A pair of tasks on the
+  //    same board are likely related; stronger if they share a column too.
+  const tasksByBoard = new Map<string, Array<{ id: string; columnId: string | null }>>();
+  (tasks ?? []).forEach((t) => {
+    if (!t.board_id) return;
+    const list = tasksByBoard.get(t.board_id as string) ?? [];
+    list.push({ id: `task-${t.id}`, columnId: (t.column_id as string | null) ?? null });
+    tasksByBoard.set(t.board_id as string, list);
+  });
+  tasksByBoard.forEach((items, boardId) => {
+    const boardName = boardNameById.get(boardId) ?? "board";
+    for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        const a = items[i];
+        const b = items[j];
+        if (!keepIds.has(a.id) || !keepIds.has(b.id)) continue;
+        const sameCol = a.columnId && a.columnId === b.columnId;
+        candidateEdges.push({
+          id: `e-${a.id}-${b.id}-board`,
+          source: a.id,
+          target: b.id,
+          kind: "same-board",
+          label: sameCol ? "same column" : boardName,
+          strength: sameCol ? 0.9 : 0.7,
+          reason: sameCol
+            ? `Both in column of board "${boardName}"`
+            : `Both on board "${boardName}"`,
+        });
+      }
+    }
+  });
+
+  // 3. Reminder explicitly linked to a task (via entity_type/entity_id) —
+  //    this is the "Set reminder on task" button's output. Hard-edge it.
+  (reminders ?? []).forEach((r) => {
+    const remId = `reminder-${r.id}`;
+    if (r.entity_type === "task" && r.entity_id) {
+      const taskId = `task-${r.entity_id}`;
+      if (keepIds.has(remId) && keepIds.has(taskId)) {
+        candidateEdges.push({
+          id: `e-${taskId}-${remId}-link`,
+          source: taskId,
+          target: remId,
+          kind: "task-reminder",
+          label: "reminder for",
+          strength: 1,
+          reason: "Reminder explicitly linked to task",
+        });
+      }
+    }
+  });
+
+  // 4. Shared-tag edges for entries. entry_tags is a join table; two entries
+  //    that share even one tag are topically linked (tags are already curated).
+  const tagsByEntry = new Map<string, Set<string>>();
+  entryTagRows.forEach((row) => {
+    const set = tagsByEntry.get(row.entry_id) ?? new Set<string>();
+    set.add(row.tag_id);
+    tagsByEntry.set(row.entry_id, set);
+  });
+  const entryNodeIds = Array.from(tagsByEntry.keys()).map((eid) => `entry-${eid}`);
+  for (let i = 0; i < entryNodeIds.length; i++) {
+    for (let j = i + 1; j < entryNodeIds.length; j++) {
+      const aId = entryNodeIds[i];
+      const bId = entryNodeIds[j];
+      if (!keepIds.has(aId) || !keepIds.has(bId)) continue;
+      const aTags = tagsByEntry.get(aId.replace(/^entry-/, "")) ?? new Set<string>();
+      const bTags = tagsByEntry.get(bId.replace(/^entry-/, "")) ?? new Set<string>();
+      const shared: string[] = [];
+      aTags.forEach((t) => { if (bTags.has(t)) shared.push(t); });
+      if (shared.length === 0) continue;
+      candidateEdges.push({
+        id: `e-${aId}-${bId}-tag`,
+        source: aId,
+        target: bId,
+        kind: "shared-tag",
+        label: `${shared.length} tag${shared.length === 1 ? "" : "s"}`,
+        strength: Math.min(1, 0.5 + shared.length * 0.2),
+        reason: `${shared.length} shared tag${shared.length === 1 ? "" : "s"}`,
+      });
+    }
+  }
+
+  // 5. Keyword edges via TF-IDF, PLUS same-day cross-kind edges.
   for (let i = 0; i < finalNodes.length; i++) {
     for (let j = i + 1; j < finalNodes.length; j++) {
       const a = finalNodes[i];
       const b = finalNodes[j];
-      // Skip page-page edges — too noisy
-      if (a.kind === "page" && b.kind === "page") continue;
+      if (a.kind === "page" && b.kind === "page") continue; // skip page-page noise
 
       const ta = tokens.get(a.id)!;
       const tb = tokens.get(b.id)!;
 
-      // Keyword similarity
-      const { score, shared } = jaccard(ta, tb);
-      if (score >= 0.25 || shared.length >= 2) {
+      const { score, shared } = weightedSimilarity(ta, tb, idf);
+      if (score >= KEYWORD_MIN_SCORE && shared.length >= 2) {
         candidateEdges.push({
           id: `e-${a.id}-${b.id}-kw`,
           source: a.id,
           target: b.id,
           kind: "keyword",
           label: shared.slice(0, 2).join(", "),
-          strength: Math.min(1, score * 2),
+          strength: Math.min(1, score * 3),
+          reason: `Shared keywords: ${shared.slice(0, 3).join(", ")} (score ${score.toFixed(2)})`,
         });
       }
 
-      // Same-day (task due_date ↔ entry date, or reminder time ↔ entry date)
       const aDate = a.due_date ?? a.reminder_time ?? a.entry_date;
       const bDate = b.due_date ?? b.reminder_time ?? b.entry_date;
       if (aDate && bDate && sameDay(aDate, bDate) && a.kind !== b.kind) {
@@ -244,16 +391,36 @@ export async function buildSmartGraph(workspaceId: string | null): Promise<Smart
           kind: "same-day",
           label: "same day",
           strength: 0.6,
+          reason: "Scheduled on the same calendar date",
         });
       }
     }
   }
 
+  // Deduplicate: if both a FK edge and a keyword edge exist between the same
+  // pair, keep the FK one (it's stronger evidence).
+  const seenPair = new Map<string, SmartEdge>();
+  // Sort so FK-kind edges come first (they win the dedupe).
+  const kindWeight: Record<EdgeKind, number> = {
+    "parent-child": 0,
+    "task-reminder": 1,
+    "same-board": 2,
+    "shared-tag": 3,
+    "keyword": 4,
+    "same-day": 5,
+  };
+  candidateEdges.sort((a, b) => kindWeight[a.kind] - kindWeight[b.kind]);
+  for (const e of candidateEdges) {
+    const key = [e.source, e.target].sort().join("::");
+    if (!seenPair.has(key)) seenPair.set(key, e);
+  }
+  const dedupedEdges = Array.from(seenPair.values());
+
   // Prune: max MAX_EDGES_PER_NODE per node, keep strongest first
   const perNodeCount = new Map<string, number>();
-  candidateEdges.sort((a, b) => b.strength - a.strength);
+  dedupedEdges.sort((a, b) => b.strength - a.strength);
   const edges: SmartEdge[] = [];
-  for (const e of candidateEdges) {
+  for (const e of dedupedEdges) {
     const sCount = perNodeCount.get(e.source) ?? 0;
     const tCount = perNodeCount.get(e.target) ?? 0;
     if (sCount >= MAX_EDGES_PER_NODE || tCount >= MAX_EDGES_PER_NODE) continue;
@@ -262,10 +429,9 @@ export async function buildSmartGraph(workspaceId: string | null): Promise<Smart
     edges.push(e);
   }
 
-  // ── Build suggestions (max ~8)
+  // ── Suggestions (unchanged heuristics, kept for compatibility) ─────────
   const suggestions: Suggestion[] = [];
 
-  // 1) Overdue reminders → complete or reschedule
   (reminders ?? []).forEach((r) => {
     const when = r.reminder_time ? new Date(r.reminder_time as string) : null;
     if (when && when < now && !r.is_completed) {
@@ -279,11 +445,10 @@ export async function buildSmartGraph(workspaceId: string | null): Promise<Smart
     }
   });
 
-  // 2) Task without due date + related reminder (keyword edge) → copy reminder time
   const tasksById = new Map((tasks ?? []).map((t) => [`task-${t.id}`, t]));
   const remindersById = new Map((reminders ?? []).map((r) => [`reminder-${r.id}`, r]));
   for (const e of edges) {
-    if (e.kind !== "keyword") continue;
+    if (e.kind !== "keyword" && e.kind !== "task-reminder") continue;
     const aIsTask = e.source.startsWith("task-") && e.target.startsWith("reminder-");
     const bIsTask = e.source.startsWith("reminder-") && e.target.startsWith("task-");
     if (!aIsTask && !bIsTask) continue;
@@ -293,7 +458,7 @@ export async function buildSmartGraph(workspaceId: string | null): Promise<Smart
     const t = tasksById.get(taskKey);
     const r = remindersById.get(remKey);
     if (!t || !r) continue;
-    if (t.due_date) continue; // already has a due date
+    if (t.due_date) continue;
     if (!r.reminder_time) continue;
 
     const rt = new Date(r.reminder_time as string);
@@ -309,7 +474,6 @@ export async function buildSmartGraph(workspaceId: string | null): Promise<Smart
     });
   }
 
-  // 3) Tasks done today without an entry → create entry prefilled
   const today = now.toISOString().slice(0, 10);
   const entryDatesTitles = new Set(
     (entries ?? []).map((e) => `${(e.date as string).slice(0, 10)}::${(e.title as string).toLowerCase()}`)
@@ -329,14 +493,13 @@ export async function buildSmartGraph(workspaceId: string | null): Promise<Smart
     });
   });
 
-  // 4) Tasks with due date but no reminder → offer to create a reminder
   (tasks ?? []).forEach((t) => {
     if (!t.due_date || t.status === "done") return;
     const taskWords = tokenize(t.title as string);
     const hasReminder = (reminders ?? []).some((r) => {
       const rw = tokenize(r.title as string);
-      const { shared } = jaccard(taskWords, rw);
-      return shared.length >= 2;
+      const sim = weightedSimilarity(taskWords, rw, idf);
+      return sim.shared.length >= 2;
     });
     if (hasReminder) return;
     suggestions.push({
@@ -351,6 +514,5 @@ export async function buildSmartGraph(workspaceId: string | null): Promise<Smart
     });
   });
 
-  // Cap suggestions
   return { nodes: finalNodes, edges, suggestions: suggestions.slice(0, 10) };
 }

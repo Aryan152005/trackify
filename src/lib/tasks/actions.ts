@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { logActivity } from "@/lib/activity/actions";
+import { istDateTimeToUtcISO } from "@/lib/utils/datetime";
 import type { TaskPriority, TaskStatus } from "@/lib/types/database";
 import type { Label } from "@/lib/types/board";
 
@@ -13,26 +14,30 @@ async function requireUser() {
   return { supabase, user };
 }
 
-// Shared ownership check: fetches the task (scoped to the caller) and returns
-// its workspace + title for downstream logging. Throws if not the caller's.
+// Access check — workspace collaborators share writes on non-private tasks.
+// RLS (migration 033) already enforces: editor+ in the same workspace OR the
+// task's own creator for private tasks. We just verify RLS allows the fetch;
+// if Supabase returns no row, the caller has no access.
 async function fetchOwnedTask(taskId: string) {
   const { supabase, user } = await requireUser();
   const { data: task } = await supabase
     .from("tasks")
-    .select("id, user_id, workspace_id, title, status")
+    .select("id, user_id, workspace_id, title, status, is_private")
     .eq("id", taskId)
-    .eq("user_id", user.id)
     .maybeSingle();
-  if (!task) throw new Error("Task not found or not yours");
+  if (!task) throw new Error("Task not found or you don't have access");
   return { supabase, user, task };
 }
 
 export async function updateTaskStatus(taskId: string, status: TaskStatus) {
   const { supabase, user, task } = await fetchOwnedTask(taskId);
+  void user;
   const patch: Record<string, unknown> = { status };
   if (status === "done") patch.completed_at = new Date().toISOString();
   else patch.completed_at = null;
-  const { error } = await supabase.from("tasks").update(patch).eq("id", taskId).eq("user_id", user.id);
+  // RLS handles the access check — no more .eq("user_id") so collaborators
+  // in the same workspace can flip statuses on each other's shared tasks.
+  const { error } = await supabase.from("tasks").update(patch).eq("id", taskId);
   if (error) throw new Error(error.message);
 
   await logActivity({
@@ -47,6 +52,8 @@ export async function updateTaskStatus(taskId: string, status: TaskStatus) {
   revalidatePath("/tasks");
   revalidatePath(`/tasks/${taskId}`);
   revalidatePath("/dashboard");
+  revalidatePath("/today");
+  revalidatePath("/mindmaps");
 }
 
 export async function createTask(input: {
@@ -78,10 +85,12 @@ export async function createTask(input: {
   if (error) throw new Error(error.message);
 
   // Auto-create a matching reminder when a due date is provided — uses
-  // the reminders table the daily cron already watches.
+  // the reminders table the daily cron already watches. Interpret the
+  // user's due_date + due_time as IST (see `lib/utils/datetime`) so cron
+  // fires at the correct wall-clock instant regardless of server TZ.
   if (input.due_date) {
     try {
-      const whenIso = new Date(`${input.due_date}T${input.due_time ?? "09:00"}:00`).toISOString();
+      const whenIso = istDateTimeToUtcISO(input.due_date, input.due_time ?? "09:00");
       await supabase.from("reminders").insert({
         user_id: user.id,
         workspace_id: input.workspaceId,
@@ -106,6 +115,8 @@ export async function createTask(input: {
 
   revalidatePath("/tasks");
   revalidatePath("/dashboard");
+  revalidatePath("/today");
+  revalidatePath("/mindmaps");
   return task as { id: string };
 }
 
@@ -121,7 +132,8 @@ export async function updateTask(
   }
 ) {
   const { supabase, user, task } = await fetchOwnedTask(taskId);
-  const { error } = await supabase.from("tasks").update(patch).eq("id", taskId).eq("user_id", user.id);
+  void user;
+  const { error } = await supabase.from("tasks").update(patch).eq("id", taskId);
   if (error) throw new Error(error.message);
 
   await logActivity({
@@ -134,11 +146,14 @@ export async function updateTask(
 
   revalidatePath("/tasks");
   revalidatePath(`/tasks/${taskId}`);
+  revalidatePath("/today");
+  revalidatePath("/mindmaps");
 }
 
 export async function deleteTask(taskId: string) {
   const { supabase, user, task } = await fetchOwnedTask(taskId);
-  const { error } = await supabase.from("tasks").delete().eq("id", taskId).eq("user_id", user.id);
+  void user;
+  const { error } = await supabase.from("tasks").delete().eq("id", taskId);
   if (error) throw new Error(error.message);
 
   await logActivity({
@@ -151,4 +166,6 @@ export async function deleteTask(taskId: string) {
 
   revalidatePath("/tasks");
   revalidatePath("/dashboard");
+  revalidatePath("/today");
+  revalidatePath("/mindmaps");
 }

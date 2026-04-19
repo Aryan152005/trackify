@@ -6,12 +6,19 @@ import { logEvent } from "@/lib/logs/logger";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+/** Max retry attempts before giving up on a reminder's push. */
+const MAX_PUSH_ATTEMPTS = 3;
+
 /**
  * Send push notifications for all reminders that are due and not yet notified.
  *
- * Idempotent: each reminder is marked `notified_at` as soon as we've attempted
- * delivery, so running this cron every minute (or every hour) produces the
- * same outcome.
+ * Retry-aware: transient delivery failures (network, provider 5xx) no longer
+ * swallow the reminder. The cron will re-try on the next tick until either:
+ *   - one push lands successfully,
+ *   - the user has zero subscriptions, or
+ *   - we've failed MAX_PUSH_ATTEMPTS times.
+ * In any of those cases, `notified_at` is set and the reminder stops being
+ * selected. See migration 031 for the schema and rationale.
  *
  * Considered "due" if:
  *   - reminder_time <= now()
@@ -39,11 +46,12 @@ export async function GET(request: Request) {
 
   const { data: dueReminders, error } = await admin
     .from("reminders")
-    .select("id, user_id, title, description, reminder_time")
+    .select("id, user_id, title, description, reminder_time, push_attempts")
     .lte("reminder_time", now.toISOString())
     .gte("reminder_time", cutoff.toISOString())
     .eq("is_completed", false)
     .is("notified_at", null)
+    .lt("push_attempts", MAX_PUSH_ATTEMPTS)
     .order("reminder_time", { ascending: true })
     .limit(100); // safety cap per run
 
@@ -65,8 +73,12 @@ export async function GET(request: Request) {
   let totalSent = 0;
   let totalFailed = 0;
   let usersWithNoSubs = 0;
+  let gaveUp = 0;
 
   for (const r of dueReminders) {
+    const attemptsSoFar = (r.push_attempts as number | null) ?? 0;
+    const nextAttempt = attemptsSoFar + 1;
+
     const result = await sendPushToUser(r.user_id as string, {
       title: `Reminder: ${r.title}`,
       body: (r.description as string) || "Your reminder is due now.",
@@ -76,26 +88,45 @@ export async function GET(request: Request) {
 
     totalSent += result.sent;
     totalFailed += result.failed;
-    if (result.sent === 0 && result.failed === 0) usersWithNoSubs++;
+    const noSubs = result.sent === 0 && result.failed === 0;
+    if (noSubs) usersWithNoSubs++;
 
-    // Mark as notified regardless — we don't want to retry forever if
-    // the user has no subscriptions (they'll see it in-app next time).
-    await admin
-      .from("reminders")
-      .update({ notified_at: now.toISOString() })
-      .eq("id", r.id);
+    // Decide the terminal state for this reminder:
+    //   - sent  > 0            → success, stop retrying.
+    //   - no subs              → nothing to deliver, stop (in-app banner only).
+    //   - all attempts failed and attempts hit the ceiling → give up.
+    //   - otherwise            → leave notified_at NULL so the next cron retries,
+    //                            but increment push_attempts.
+    const done = result.sent > 0 || noSubs || nextAttempt >= MAX_PUSH_ATTEMPTS;
+
+    if (done) {
+      if (result.sent === 0 && !noSubs && nextAttempt >= MAX_PUSH_ATTEMPTS) gaveUp++;
+      await admin
+        .from("reminders")
+        .update({
+          notified_at: now.toISOString(),
+          push_attempts: nextAttempt,
+        })
+        .eq("id", r.id);
+    } else {
+      await admin
+        .from("reminders")
+        .update({ push_attempts: nextAttempt })
+        .eq("id", r.id);
+    }
   }
 
   await logEvent({
     service: "cron",
-    level: totalFailed > 0 ? "warn" : "info",
+    level: gaveUp > 0 || totalFailed > 0 ? "warn" : "info",
     tag: "remindersPush.run",
-    message: `Reminder push cron — processed ${dueReminders.length}, sent ${totalSent}`,
+    message: `Reminder push cron — processed ${dueReminders.length}, sent ${totalSent}, gave up on ${gaveUp}`,
     metadata: {
       processed: dueReminders.length,
       sent: totalSent,
       failed: totalFailed,
       usersWithNoSubs,
+      gaveUp,
     },
   });
 
@@ -104,5 +135,6 @@ export async function GET(request: Request) {
     sent: totalSent,
     failed: totalFailed,
     usersWithNoSubs,
+    gaveUp,
   });
 }

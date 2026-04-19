@@ -7,8 +7,10 @@ import { PageHeader } from "@/components/ui/page-header";
 import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { TaskActions } from "@/components/tasks/task-actions";
+import { TaskReminderButton } from "@/components/tasks/task-reminder-button";
 import { SubtaskList } from "@/components/tasks/subtask-list";
 import { TaskDependencies } from "@/components/tasks/task-dependencies";
+import { PrivateToggle } from "@/components/personal/private-toggle";
 import { CollaborationToolbar } from "@/components/collaboration/collaboration-toolbar";
 import { RealtimeRefresh } from "@/components/shared/realtime-refresh";
 import { AlertTriangle } from "lucide-react";
@@ -20,12 +22,16 @@ export default async function TaskDetailPage({ params }: { params: { id: string 
 
   const workspaceId = await getActiveWorkspaceId();
 
+  // Access control sits at RLS — a workspace editor (or the task owner for
+  // private tasks) can open it. No explicit user_id gate here so a teammate
+  // can open a shared task. If workspaceId is set we scope to it as a sanity
+  // check; otherwise fall back to owner-only (user viewing without a ws).
   let query = supabase
     .from("tasks")
     .select("*")
-    .eq("id", params.id)
-    .eq("user_id", user.id);
+    .eq("id", params.id);
   if (workspaceId) query = query.eq("workspace_id", workspaceId);
+  else query = query.eq("user_id", user.id);
   const { data: task } = await query.maybeSingle();
 
   if (!task) notFound();
@@ -46,6 +52,11 @@ export default async function TaskDetailPage({ params }: { params: { id: string 
           <>
             <TaskStatusBadge status={task.status} />
             <TaskPriorityBadge priority={task.priority} />
+            <PrivateToggle
+              entityType="tasks"
+              entityId={task.id}
+              isPrivate={!!task.is_private}
+            />
           </>
         }
       />
@@ -110,8 +121,18 @@ export default async function TaskDetailPage({ params }: { params: { id: string 
           )}
         </div>
 
-        <div>
+        <div className="space-y-4">
           <TaskActions task={task} />
+          <TaskReminderButton
+            task={{
+              id: task.id,
+              title: task.title,
+              description: task.description,
+              due_date: task.due_date,
+              due_time: task.due_time,
+              workspace_id: task.workspace_id,
+            }}
+          />
         </div>
       </div>
     </div>

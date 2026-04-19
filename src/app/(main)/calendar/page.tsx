@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   format,
@@ -36,6 +37,7 @@ import {
   createEvent,
   updateEvent,
   deleteEvent,
+  getEventById,
   getAggregatedCalendar,
 } from "@/lib/calendar/actions";
 import { cn } from "@/lib/utils";
@@ -44,6 +46,7 @@ type ViewMode = "month" | "week";
 
 export default function CalendarPage() {
   const workspaceId = useWorkspaceId();
+  const router = useRouter();
 
   const [view, setView] = useState<ViewMode>("month");
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -123,18 +126,41 @@ export default function CalendarPage() {
     setShowForm(true);
   }
 
-  function handleEventClick(id: string) {
+  async function handleEventClick(id: string) {
     const evt = events.find((e) => e.id === id);
     if (!evt) return;
-    setEditingEvent({
-      id: evt.id,
-      title: evt.title,
-      start_time: evt.start_time,
-      end_time: evt.end_time,
-      color: evt.color,
-    });
-    setDefaultDate(undefined);
-    setShowForm(true);
+
+    // Tasks and reminders live in their own tables — editing them in the event
+    // dialog would be lossy (due_date vs start/end etc). Route to their detail
+    // pages instead. Only true calendar_events open the inline form.
+    if (evt.type === "task") {
+      router.push(`/tasks/${evt.id}`);
+      return;
+    }
+    if (evt.type === "reminder") {
+      router.push(`/reminders`);
+      return;
+    }
+
+    // Calendar event: fetch the full record so description/location/all_day
+    // are preserved in the edit form (the tile row doesn't carry them).
+    try {
+      const full = await getEventById(evt.id);
+      setEditingEvent({
+        id: full.id as string,
+        title: full.title as string,
+        description: (full.description as string) ?? null,
+        start_time: full.start_time as string,
+        end_time: full.end_time as string,
+        all_day: (full.all_day as boolean) ?? false,
+        color: (full.color as string) ?? null,
+        location: (full.location as string) ?? null,
+      });
+      setDefaultDate(undefined);
+      setShowForm(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't open event");
+    }
   }
 
   function handleAddEvent() {

@@ -23,13 +23,17 @@ export default async function EntriesPage() {
       title,
       status,
       productivity_score,
+      user_id,
       entry_tags ( tag_id, tags ( id, name, color ) )
     `)
-    .eq("user_id", user.id)
     .order("date", { ascending: false })
     .limit(500);
 
-  const { data: raw } = workspaceId ? await query.eq("workspace_id", workspaceId) : await query;
+  // With an active workspace, show everyone's non-private entries (RLS-scoped);
+  // fall back to owner-only view when no workspace is active.
+  const { data: raw } = workspaceId
+    ? await query.eq("workspace_id", workspaceId)
+    : await query.eq("user_id", user.id);
 
   const rows = (raw ?? []).map((entry) => {
     const tags = (entry.entry_tags as unknown as { tags: { name: string; color: string } | null }[] | null)

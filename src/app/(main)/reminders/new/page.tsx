@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { addMinutes, addHours, addDays, nextMonday, setHours, setMinutes, setSeconds, format } from "date-fns";
+import { addMinutes, addHours } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspaceId } from "@/lib/workspace/hooks";
+import { istLocalToUtcISO, utcISOToIstLocalInput, istDateKey } from "@/lib/utils/datetime";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
@@ -49,7 +50,10 @@ export default function NewReminderPage() {
         workspace_id: workspaceId,
         title: title.trim(),
         description: description.trim() || null,
-        reminder_time: new Date(reminderTime).toISOString(),
+        // Interpret the input as IST (not browser-local) so the stored UTC
+        // instant matches the wall-clock time the user typed, regardless
+        // of the device's timezone.
+        reminder_time: istLocalToUtcISO(reminderTime),
         is_recurring: isRecurring,
         recurrence_pattern: isRecurring ? recurrencePattern : null,
       });
@@ -119,15 +123,30 @@ export default function NewReminderPage() {
               </label>
               <div className="mt-2 flex flex-wrap gap-2">
                 {(() => {
-                  const setTo = (d: Date) => {
-                    setReminderTime(`${format(d, "yyyy-MM-dd")}T${format(d, "HH:mm")}`);
+                  // All chips produce IST wall-clock values so the stored
+                  // instant matches what the user sees, regardless of device TZ.
+                  const setTo = (d: Date) => setReminderTime(utcISOToIstLocalInput(d.toISOString()));
+                  // "IST today" as a YYYY-MM-DD string, and a helper that
+                  // builds tomorrow (or next Monday) at 9 AM IST as an instant.
+                  const todayIst = istDateKey(new Date());
+                  const istAt9 = (daysAhead: number) => {
+                    // Start from today 00:00 IST, shift by daysAhead, pick 9am.
+                    const base = new Date(`${todayIst}T09:00:00+05:30`);
+                    return new Date(base.getTime() + daysAhead * 24 * 3600 * 1000);
                   };
+                  // Day-of-week in IST (0 = Sun ... 6 = Sat). Computing via
+                  // toLocaleString gives us the IST calendar day regardless
+                  // of the browser's own timezone.
+                  const istDow = new Date(
+                    new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }),
+                  ).getDay();
+                  const daysToMon = ((1 - istDow + 7) % 7) || 7;
                   const chips: { label: string; fn: () => Date }[] = [
                     { label: "+15 min", fn: () => addMinutes(new Date(), 15) },
                     { label: "+1 hour", fn: () => addHours(new Date(), 1) },
                     { label: "+3 hours", fn: () => addHours(new Date(), 3) },
-                    { label: "Tomorrow 9 AM", fn: () => setSeconds(setMinutes(setHours(addDays(new Date(), 1), 9), 0), 0) },
-                    { label: "Next Monday 9 AM", fn: () => setSeconds(setMinutes(setHours(nextMonday(new Date()), 9), 0), 0) },
+                    { label: "Tomorrow 9 AM IST", fn: () => istAt9(1) },
+                    { label: "Next Monday 9 AM IST", fn: () => istAt9(daysToMon) },
                   ];
                   return chips.map((c) => (
                     <button

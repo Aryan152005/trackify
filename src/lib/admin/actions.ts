@@ -71,10 +71,11 @@ export async function getAllUsers() {
   await requireAdmin();
   const admin = createAdminClient();
 
-  // Get all user profiles
+  // Get all user profiles (including the heartbeat-driven last_activity_at
+  // so "last active" truly reflects activity, not last login).
   const { data: profiles } = await admin
     .from("user_profiles")
-    .select("user_id, name, avatar_url, created_at, updated_at")
+    .select("user_id, name, avatar_url, created_at, updated_at, last_activity_at")
     .order("created_at", { ascending: false });
 
   if (!profiles) return [];
@@ -115,17 +116,30 @@ export async function getAllUsers() {
     pageMap.set(p.created_by, (pageMap.get(p.created_by) ?? 0) + 1);
   });
 
-  return profiles.map((p) => ({
-    id: p.user_id,
-    name: p.name,
-    email: emailMap.get(p.user_id) ?? "unknown",
-    avatarUrl: p.avatar_url,
-    joinedAt: p.created_at,
-    lastSignIn: lastSignInMap.get(p.user_id) ?? null,
-    entryCount: entryMap.get(p.user_id) ?? 0,
-    taskStats: taskMap.get(p.user_id) ?? { total: 0, done: 0 },
-    pageCount: pageMap.get(p.user_id) ?? 0,
-  }));
+  return profiles.map((p) => {
+    const lastSignIn = lastSignInMap.get(p.user_id) ?? null;
+    const lastActivity = (p.last_activity_at as string | null) ?? null;
+    // Pick the more-recent of the two signals. Falls back to whichever exists.
+    const lastActive =
+      lastActivity && lastSignIn
+        ? new Date(lastActivity) > new Date(lastSignIn)
+          ? lastActivity
+          : lastSignIn
+        : (lastActivity ?? lastSignIn);
+    return {
+      id: p.user_id,
+      name: p.name,
+      email: emailMap.get(p.user_id) ?? "unknown",
+      avatarUrl: p.avatar_url,
+      joinedAt: p.created_at,
+      lastSignIn,
+      lastActivityAt: lastActivity,
+      lastActive,
+      entryCount: entryMap.get(p.user_id) ?? 0,
+      taskStats: taskMap.get(p.user_id) ?? { total: 0, done: 0 },
+      pageCount: pageMap.get(p.user_id) ?? 0,
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -268,6 +282,7 @@ export async function getUserDetail(userId: string) {
     { data: pages },
     { data: boards },
     { data: reminders },
+    { data: notifications },
     { data: logs },
     { data: feedback },
     { data: timers },
@@ -278,14 +293,19 @@ export async function getUserDetail(userId: string) {
       "id, title, description, work_done, learning, next_day_plan, mood, date, status, productivity_score, created_at"
     ).eq("user_id", userId).order("date", { ascending: false }).limit(50),
     admin.from("tasks").select(
-      "id, title, description, status, priority, due_date, created_at, completed_at"
+      "id, title, description, status, priority, due_date, due_time, created_at, completed_at"
     ).eq("user_id", userId).order("created_at", { ascending: false }).limit(50),
     admin.from("pages").select("id, title, created_at, updated_at")
       .eq("created_by", userId).order("updated_at", { ascending: false }).limit(20),
     admin.from("boards").select("id, name, created_at")
       .eq("created_by", userId).order("created_at", { ascending: false }).limit(20),
-    admin.from("reminders").select("id, title, description, reminder_time, is_completed, created_at")
-      .eq("user_id", userId).order("created_at", { ascending: false }).limit(20),
+    admin.from("reminders").select("id, title, description, reminder_time, is_recurring, recurrence_pattern, is_completed, notified_at, created_at")
+      .eq("user_id", userId).order("created_at", { ascending: false }).limit(30),
+    // Notifications received by this user — shows what the system alerted them
+    // about and whether they read it.
+    admin.from("notifications").select(
+      "id, type, title, body, entity_type, entity_id, is_read, created_at"
+    ).eq("user_id", userId).order("created_at", { ascending: false }).limit(30),
     // Recent system_logs attributed to this user
     admin.from("system_logs").select("id, service, level, tag, message, metadata, created_at")
       .eq("user_id", userId).order("created_at", { ascending: false }).limit(50),
@@ -303,12 +323,14 @@ export async function getUserDetail(userId: string) {
     profile,
     email: authData?.user?.email ?? "unknown",
     lastSignIn: authData?.user?.last_sign_in_at ?? null,
+    lastActivityAt: (profile?.last_activity_at as string | null) ?? null,
     createdAt: authData?.user?.created_at ?? null,
     entries: entries ?? [],
     tasks: tasks ?? [],
     pages: pages ?? [],
     boards: boards ?? [],
     reminders: reminders ?? [],
+    notifications: notifications ?? [],
     logs: logs ?? [],
     feedback: feedback ?? [],
     timers: timers ?? [],

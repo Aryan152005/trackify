@@ -26,17 +26,20 @@ import {
   moveTask,
   addTaskToBoard,
   createColumn,
-  updateColumn as updateColumnAction,
   deleteColumn as deleteColumnAction,
   reorderColumns,
 } from "@/lib/boards/actions";
 import { AnimatedPage } from "@/components/ui/animated-layout";
 import { CollaborationToolbar } from "@/components/collaboration/collaboration-toolbar";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PageHeader } from "@/components/ui/page-header";
 import { KanbanColumn, KanbanColumnOverlay } from "@/components/boards/kanban-column";
 import { KanbanCardOverlay } from "@/components/boards/kanban-card";
 import { TaskDetailModal } from "@/components/boards/task-detail-modal";
+import { BoardSettings } from "@/components/boards/board-settings";
+import { ColumnEditDialog } from "@/components/boards/column-edit-dialog";
+import { PrivateToggle } from "@/components/personal/private-toggle";
 import {
   Plus,
   Loader2,
@@ -84,6 +87,13 @@ export default function BoardDetailPage() {
   // Task detail modal
   const [selectedTask, setSelectedTask] = useState<TaskCard | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+
+  // Column edit dialog
+  const [editingColumn, setEditingColumn] = useState<BoardColumnWithTasks | null>(null);
+  const [columnEditOpen, setColumnEditOpen] = useState(false);
+
+  // Column delete confirm
+  const [deletingColumnId, setDeletingColumnId] = useState<string | null>(null);
 
   // -------------------------------------------------------------------------
   // Fetch data
@@ -474,33 +484,40 @@ export default function BoardDetailPage() {
     }
   }
 
-  async function handleEditColumn(
-    columnId: string,
-    name: string,
-    color: string
-  ) {
-    const newName = window.prompt("Column name:", name);
-    if (newName && newName !== name) {
-      try {
-        await updateColumnAction(columnId, { name: newName });
-        setColumns((prev) =>
-          prev.map((c) =>
-            c.id === columnId ? { ...c, name: newName } : c
-          )
-        );
-      } catch {
-        // silent
-      }
-    }
+  // Signature matches KanbanColumn's onEditColumn; we re-read from state so the
+  // extra args aren't used (keeps the callback call-site unchanged).
+  function handleEditColumn(columnId: string, _name: string, _color: string) {
+    void _name;
+    void _color;
+    const col = columns.find((c) => c.id === columnId);
+    if (!col) return;
+    setEditingColumn(col);
+    setColumnEditOpen(true);
   }
 
-  async function handleDeleteColumn(columnId: string) {
-    if (!window.confirm("Delete this column? Tasks will be unlinked.")) return;
+  function handleColumnSaved(
+    columnId: string,
+    patch: { name: string; color: string }
+  ) {
+    setColumns((prev) =>
+      prev.map((c) => (c.id === columnId ? { ...c, ...patch } : c))
+    );
+  }
+
+  function handleDeleteColumn(columnId: string) {
+    setDeletingColumnId(columnId);
+  }
+
+  async function confirmDeleteColumn() {
+    if (!deletingColumnId) return;
     try {
-      await deleteColumnAction(columnId);
-      setColumns((prev) => prev.filter((c) => c.id !== columnId));
-    } catch {
-      // silent
+      await deleteColumnAction(deletingColumnId);
+      setColumns((prev) => prev.filter((c) => c.id !== deletingColumnId));
+      toast.success("Column deleted");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete column");
+    } finally {
+      setDeletingColumnId(null);
     }
   }
 
@@ -526,6 +543,16 @@ export default function BoardDetailPage() {
           description={board.description ?? undefined}
           backHref="/boards"
           backLabel="Back to Boards"
+          actions={
+            <div className="flex items-center gap-2">
+              <PrivateToggle
+                entityType="boards"
+                entityId={board.id}
+                isPrivate={!!(board as unknown as { is_private?: boolean }).is_private}
+              />
+              <BoardSettings board={{ id: board.id, name: board.name, description: board.description }} />
+            </div>
+          }
         />
 
         <CollaborationToolbar
@@ -670,6 +697,29 @@ export default function BoardDetailPage() {
         onUpdate={handleTaskUpdate}
         onDelete={handleTaskDelete}
         members={members}
+      />
+
+      {/* Column edit dialog */}
+      <ColumnEditDialog
+        column={editingColumn}
+        open={columnEditOpen}
+        onOpenChange={(next) => {
+          setColumnEditOpen(next);
+          if (!next) setEditingColumn(null);
+        }}
+        onSaved={handleColumnSaved}
+      />
+
+      {/* Column delete confirm */}
+      <ConfirmDialog
+        open={!!deletingColumnId}
+        onOpenChange={(next) => !next && setDeletingColumnId(null)}
+        title="Delete this column?"
+        description="Tasks in this column will be unlinked but not deleted. This can't be undone."
+        confirmLabel="Delete"
+        cancelLabel="Keep"
+        variant="danger"
+        onConfirm={confirmDeleteColumn}
       />
     </AnimatedPage>
   );

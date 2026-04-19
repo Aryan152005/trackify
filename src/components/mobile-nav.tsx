@@ -30,6 +30,7 @@ import {
   Flame,
   Shield,
   Target,
+  Sun,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WorkspaceSwitcher } from "@/components/workspace-switcher";
@@ -38,6 +39,7 @@ const navSections = [
   {
     label: "Main",
     items: [
+      { href: "/today", label: "Today", icon: Sun },
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/personal", label: "Personal", icon: User },
     ],

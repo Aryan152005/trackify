@@ -59,6 +59,60 @@ export function buttonHtml(text: string, url: string): string {
   </td></tr></table>`;
 }
 
+/**
+ * PWA install instructions block.
+ *
+ * Included in every email where the recipient might be opening the app for
+ * the first time — whitelist approval, workspace invite, platform invite.
+ * Works on:
+ *   - Android + Chrome / Edge: menu (⋮) → "Add to Home screen" or "Install app"
+ *   - Desktop Chrome / Edge: URL bar install icon, or menu → "Install Trackify"
+ *   - iOS + Safari (iOS 16.4+): Share (⎋) → "Add to Home Screen"
+ *   - iOS Chrome/Firefox/Edge don't support install — we note to use Safari
+ *
+ * Keep the HTML simple so plain-text readers (our html-to-text pipeline and
+ * legacy mail clients) still get a coherent numbered list.
+ */
+export function pwaInstallStepsHtml(): string {
+  return `
+<div style="margin:24px 0 8px;padding:20px 22px;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0">
+  <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#6366f1;letter-spacing:0.4px;text-transform:uppercase">
+    📱 Install Trackify on your device
+  </p>
+  <p style="margin:0 0 14px;font-size:13px;color:#475569;line-height:1.55">
+    Trackify runs great in any browser, and you can also install it like a native app — you'll get an icon on your phone or desktop, faster launch, and push notifications that land while the tab is closed.
+  </p>
+
+  <p style="margin:16px 0 6px;font-size:13px;font-weight:700;color:#18181b">🤖 Android (Chrome or Edge)</p>
+  <ol style="margin:0 0 14px;padding-left:22px;color:#475569;font-size:13px;line-height:1.7">
+    <li>Open the invite link above in <strong>Chrome</strong> (or Edge).</li>
+    <li>Tap the menu <strong>⋮</strong> in the top-right.</li>
+    <li>Tap <strong>Install app</strong> (or <strong>Add to Home screen</strong>).</li>
+    <li>Confirm — an icon appears on your home screen.</li>
+  </ol>
+
+  <p style="margin:16px 0 6px;font-size:13px;font-weight:700;color:#18181b">🍎 iPhone / iPad (Safari only)</p>
+  <ol style="margin:0 0 14px;padding-left:22px;color:#475569;font-size:13px;line-height:1.7">
+    <li>Open the invite link in <strong>Safari</strong> (install isn't supported in Chrome/Firefox on iOS).</li>
+    <li>Tap the <strong>Share</strong> icon (square with ↑) at the bottom.</li>
+    <li>Scroll down and tap <strong>Add to Home Screen</strong>.</li>
+    <li>Tap <strong>Add</strong> in the top-right — the icon appears on your home screen.</li>
+  </ol>
+
+  <p style="margin:16px 0 6px;font-size:13px;font-weight:700;color:#18181b">💻 Desktop (Chrome or Edge)</p>
+  <ol style="margin:0 0 0;padding-left:22px;color:#475569;font-size:13px;line-height:1.7">
+    <li>Open the invite link in <strong>Chrome</strong> or <strong>Edge</strong>.</li>
+    <li>Click the <strong>install icon</strong> (a small screen with a down-arrow) in the right side of the address bar.</li>
+    <li>Or open the menu and choose <strong>Install Trackify…</strong>.</li>
+    <li>Trackify opens in its own window with a Dock / Start-menu icon.</li>
+  </ol>
+
+  <p style="margin:14px 0 0;font-size:12px;color:#94a3b8;line-height:1.55">
+    You can still use Trackify in any browser tab — installing is purely optional, it just makes daily access quicker.
+  </p>
+</div>`;
+}
+
 // ---------------------------------------------------------------------------
 // Pre-built email templates
 // ---------------------------------------------------------------------------
@@ -80,7 +134,8 @@ export function welcomeEmail(name: string): { subject: string; html: string } {
         <li><strong>Get insights</strong> from analytics and reports</li>
       </ul>
       ${buttonHtml("Open Trackify", appUrl + "/dashboard")}
-      <p style="margin:0;color:#a1a1aa;font-size:13px">Happy tracking!</p>
+      ${pwaInstallStepsHtml()}
+      <p style="margin:16px 0 0;color:#a1a1aa;font-size:13px">Happy tracking!</p>
     `, `Welcome to ${APP_NAME} — your workspace is ready`),
   };
 }
@@ -107,6 +162,10 @@ export function whitelistApprovedEmail(name: string, email: string): { subject: 
         You can now create your account and start using the platform.
       </p>
       ${buttonHtml("Create Your Account", appUrl + "/signup")}
+      <p style="margin:0 0 8px;color:#52525b;font-size:14px;line-height:1.6">
+        After you sign up, we recommend installing ${APP_NAME} to your phone or desktop so it behaves like a native app:
+      </p>
+      ${pwaInstallStepsHtml()}
     `, `Your access to ${APP_NAME} has been approved`),
   };
 }
@@ -144,6 +203,7 @@ export function inviteEmail(name: string, inviterName: string, workspaceName: st
         <li>Get insights from analytics and export reports</li>
       </ul>
       ${buttonHtml("Accept Invite", inviteUrl)}
+      ${pwaInstallStepsHtml()}
       <p style="margin:16px 0 0;color:#a1a1aa;font-size:12px">
         This invite expires in 7 days. If you didn't expect this, you can safely ignore it.
       </p>
@@ -244,6 +304,8 @@ export function platformInviteEmail(
         <p style="margin:0;color:#a1a1aa;font-size:12px">Free to try · No credit card · Ready in 30 seconds</p>
       </div>
 
+      ${pwaInstallStepsHtml()}
+
       <!-- Testimonial strip -->
       <div style="margin:24px 0 12px;padding:16px 18px;background:#fafafa;border-radius:10px;border:1px solid #e4e4e7">
         <p style="margin:0 0 6px;color:#18181b;font-size:14px;font-style:italic;line-height:1.55">
@@ -300,6 +362,96 @@ export function weeklyDigestEmail(name: string, stats: { entries: number; tasks:
   };
 }
 
+/**
+ * Role-change notification — sent to a member when an admin updates their
+ * workspace role (e.g. promoted to admin, demoted to viewer). Keeps roles
+ * transparent so nobody's surprised by a missing permission.
+ */
+export function roleChangedEmail(
+  name: string,
+  workspaceName: string,
+  newRole: "owner" | "admin" | "editor" | "viewer",
+  changedByName: string,
+): { subject: string; html: string } {
+  const appUrl = getAppUrl();
+  const roleCopy: Record<typeof newRole, string> = {
+    owner: "workspace owner — you have full control",
+    admin: "workspace admin — you can invite members, manage settings, and edit everything",
+    editor: "editor — you can create, edit, and delete content",
+    viewer: "viewer — you can see content but not edit it",
+  };
+  return {
+    subject: `Your role in ${workspaceName} was updated`,
+    html: emailLayout(`
+      <h2 style="margin:0 0 16px;font-size:20px;color:#18181b">Your role has changed</h2>
+      <p style="margin:0 0 12px;color:#52525b;font-size:15px;line-height:1.6">
+        Hi${name ? ` ${name}` : ""},<br/>
+        <strong>${changedByName}</strong> just changed your role in
+        <strong>${workspaceName}</strong>.
+      </p>
+      <div style="margin:0 0 16px;padding:14px 16px;background:#eef2ff;border-radius:10px;border-left:4px solid #6366f1">
+        <p style="margin:0;color:#4338ca;font-size:14px;font-weight:600">New role: ${newRole}</p>
+        <p style="margin:4px 0 0;color:#4338ca;font-size:13px;line-height:1.5">${roleCopy[newRole]}.</p>
+      </div>
+      <p style="margin:0 0 12px;color:#52525b;font-size:14px;line-height:1.6">
+        If you think this was a mistake, reach out to ${changedByName} or a workspace admin.
+      </p>
+      ${buttonHtml("Open workspace", appUrl + "/workspace/members")}
+    `, `Role updated in ${workspaceName}`),
+  };
+}
+
+/**
+ * Acknowledgement to the *inviter* when someone declines their invite —
+ * keeps them in the loop without being a noisy notification for the invitee.
+ */
+export function invitationDeclinedEmail(
+  inviterName: string,
+  declinedEmail: string,
+  workspaceName: string,
+): { subject: string; html: string } {
+  const appUrl = getAppUrl();
+  return {
+    subject: `${declinedEmail} declined your invite to ${workspaceName}`,
+    html: emailLayout(`
+      <h2 style="margin:0 0 16px;font-size:20px;color:#18181b">Invite declined</h2>
+      <p style="margin:0 0 12px;color:#52525b;font-size:15px;line-height:1.6">
+        Hi${inviterName ? ` ${inviterName}` : ""},<br/>
+        <strong>${declinedEmail}</strong> declined your invitation to join
+        <strong>${workspaceName}</strong>. No action needed — the pending
+        invite has been removed.
+      </p>
+      <p style="margin:0 0 12px;color:#52525b;font-size:14px;line-height:1.6">
+        Want to try again? You can re-send the invite from the workspace
+        members page, or invite a different email address.
+      </p>
+      ${buttonHtml("Manage invites", appUrl + "/workspace/members")}
+    `, `${declinedEmail} declined your invite`),
+  };
+}
+
+/**
+ * Generic "here's how to install the app" email — useful for ad-hoc admin
+ * broadcasts to users who have an account but haven't installed the PWA yet.
+ */
+export function pwaInstallReminderEmail(name: string): { subject: string; html: string } {
+  const appUrl = getAppUrl();
+  return {
+    subject: `Install ${APP_NAME} in 30 seconds`,
+    html: emailLayout(`
+      <h2 style="margin:0 0 16px;font-size:20px;color:#18181b">Make ${APP_NAME} feel native</h2>
+      <p style="margin:0 0 12px;color:#52525b;font-size:15px;line-height:1.6">
+        Hi${name ? ` ${name}` : ""},<br/>
+        ${APP_NAME} works in any browser, but installing it to your device
+        gives you: a proper icon, push notifications even when the tab is
+        closed, and much faster launch.
+      </p>
+      ${buttonHtml("Open " + APP_NAME, appUrl)}
+      ${pwaInstallStepsHtml()}
+    `, `Install ${APP_NAME} on your device`),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Available template IDs for admin UI
 // ---------------------------------------------------------------------------
@@ -310,4 +462,7 @@ export const EMAIL_TEMPLATES = [
   { id: "maintenance", name: "Maintenance Notice", desc: "Scheduled downtime alert" },
   { id: "new-feature", name: "New Feature Announcement", desc: "Announce a new feature" },
   { id: "weekly-digest", name: "Weekly Digest", desc: "Weekly stats summary (auto)" },
+  { id: "pwa-install", name: "Install App Reminder", desc: "How-to-install PWA steps for existing users" },
+  { id: "role-changed", name: "Role Updated", desc: "Notify a member their workspace role changed" },
+  { id: "invitation-declined", name: "Invite Declined", desc: "Tell an inviter their invite was declined" },
 ] as const;

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Pencil, Trash2, Loader2, X, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { updateEntry, deleteEntry } from "@/lib/entries/actions";
 
 interface EntryActionsProps {
@@ -25,6 +26,7 @@ export function EntryActions(props: EntryActionsProps) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Form fields
   const [title, setTitle] = useState(props.initialTitle);
@@ -67,8 +69,7 @@ export function EntryActions(props: EntryActionsProps) {
     }
   }
 
-  async function handleDelete() {
-    if (!confirm(`Delete "${props.initialTitle}"? This can't be undone.`)) return;
+  async function performDelete() {
     setBusy(true);
     try {
       await deleteEntry(props.entryId);
@@ -83,21 +84,34 @@ export function EntryActions(props: EntryActionsProps) {
 
   if (!editing) {
     return (
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={() => setEditing(true)} className="gap-1.5">
-          <Pencil className="h-3.5 w-3.5" />
-          Edit
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleDelete}
-          disabled={busy}
-          className="gap-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
-        >
-          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-        </Button>
-      </div>
+      <>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setEditing(true)} className="gap-1.5">
+            <Pencil className="h-3.5 w-3.5" />
+            Edit
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setConfirmDelete(true)}
+            disabled={busy}
+            className="gap-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+          >
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+          </Button>
+        </div>
+
+        <ConfirmDialog
+          open={confirmDelete}
+          onOpenChange={setConfirmDelete}
+          title="Delete this entry?"
+          description={`"${props.initialTitle}" will be permanently removed. This can't be undone.`}
+          confirmLabel="Delete"
+          cancelLabel="Keep"
+          variant="danger"
+          onConfirm={performDelete}
+        />
+      </>
     );
   }
 

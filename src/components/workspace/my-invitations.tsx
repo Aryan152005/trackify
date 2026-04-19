@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Mail, Check, X, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { listMyInvitations, declineInvitation, type MyInvitation } from "@/lib/workspace/invitations-actions";
 import { formatDistanceToNow } from "date-fns";
 
@@ -15,6 +16,7 @@ import { formatDistanceToNow } from "date-fns";
 export function MyInvitations() {
   const [invs, setInvs] = useState<MyInvitation[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [pendingDecline, setPendingDecline] = useState<MyInvitation | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -27,8 +29,7 @@ export function MyInvitations() {
 
   useEffect(() => { load(); }, [load]);
 
-  async function handleDecline(id: string) {
-    if (!confirm("Decline this invitation? You can be re-invited later.")) return;
+  async function performDecline(id: string) {
     setBusy(id);
     try {
       await declineInvitation(id);
@@ -85,7 +86,7 @@ export function MyInvitations() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => handleDecline(i.id)}
+                  onClick={() => setPendingDecline(i)}
                   disabled={busy === i.id}
                   className="gap-1"
                 >
@@ -97,6 +98,24 @@ export function MyInvitations() {
           ))}
         </ul>
       </CardContent>
+
+      <ConfirmDialog
+        open={!!pendingDecline}
+        onOpenChange={(next) => !next && setPendingDecline(null)}
+        title="Decline this invitation?"
+        description={
+          pendingDecline
+            ? `You'll be removed from the invite list for "${pendingDecline.workspace_name}". You can be re-invited later.`
+            : ""
+        }
+        confirmLabel="Decline"
+        cancelLabel="Keep"
+        onConfirm={() => {
+          const id = pendingDecline?.id;
+          setPendingDecline(null);
+          if (id) performDecline(id);
+        }}
+      />
     </Card>
   );
 }

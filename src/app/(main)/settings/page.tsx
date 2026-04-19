@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
-  User, Bell, Briefcase, Users, Plug, AlertTriangle, ChevronRight, Sparkles,
+  User, Bell, Briefcase, Users, Plug, AlertTriangle, ChevronRight, Sparkles, Palette,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -25,6 +25,13 @@ export default async function SettingsPage() {
       title: "Profile",
       description: "Your name, avatar, email. Signed in as " + (user.email ?? "unknown"),
       tone: "from-indigo-500 to-blue-500",
+    },
+    {
+      href: "/settings/preferences",
+      icon: Palette,
+      title: "Preferences",
+      description: "Landing page, density, accent color, default views, quick-capture button.",
+      tone: "from-fuchsia-500 to-pink-500",
     },
     {
       href: "/reminders",

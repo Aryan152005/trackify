@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import Image from "next/image";
 import { CollaborationToolbar } from "@/components/collaboration/collaboration-toolbar";
 import { EntryActions } from "@/components/entries/entry-actions";
+import { PrivateToggle } from "@/components/personal/private-toggle";
 
 export default async function EntryDetailPage({
   params,
@@ -40,12 +41,13 @@ export default async function EntryDetailPage({
       status,
       created_at,
       workspace_id,
+      is_private,
       entry_tags ( tag_id, tags ( id, name, color ) )
     `
     )
-    .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("id", id);
   if (workspaceId) query = query.eq("workspace_id", workspaceId);
+  else query = query.eq("user_id", user.id);
   const { data: entry } = await query.single();
 
   if (!entry) notFound();
@@ -69,19 +71,26 @@ export default async function EntryDetailPage({
         >
           ← Back to entries
         </Link>
-        <EntryActions
-          entryId={entry.id as string}
-          initialTitle={entry.title as string}
-          initialDate={entry.date as string}
-          initialStatus={(entry.status as string) ?? "done"}
-          initialDescription={(entry.description as string) ?? ""}
-          initialWorkDone={(entry.work_done as string) ?? ""}
-          initialLearning={(entry.learning as string) ?? ""}
-          initialNextDayPlan={(entry.next_day_plan as string) ?? ""}
-          initialMood={(entry.mood as string) ?? ""}
-          initialScore={(entry.productivity_score as number) ?? null}
-          initialHours={(entry.hours_worked as number) ?? null}
-        />
+        <div className="flex items-center gap-2">
+          <PrivateToggle
+            entityType="entries"
+            entityId={entry.id as string}
+            isPrivate={!!entry.is_private}
+          />
+          <EntryActions
+            entryId={entry.id as string}
+            initialTitle={entry.title as string}
+            initialDate={entry.date as string}
+            initialStatus={(entry.status as string) ?? "done"}
+            initialDescription={(entry.description as string) ?? ""}
+            initialWorkDone={(entry.work_done as string) ?? ""}
+            initialLearning={(entry.learning as string) ?? ""}
+            initialNextDayPlan={(entry.next_day_plan as string) ?? ""}
+            initialMood={(entry.mood as string) ?? ""}
+            initialScore={(entry.productivity_score as number) ?? null}
+            initialHours={(entry.hours_worked as number) ?? null}
+          />
+        </div>
       </div>
 
       <CollaborationToolbar

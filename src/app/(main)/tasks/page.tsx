@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getActiveWorkspaceId } from "@/lib/workspace/actions";
+import { getUserPreferences } from "@/lib/preferences/actions";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,11 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { SharedSection } from "@/components/collaboration/shared-section";
 import type { Task } from "@/lib/types/database";
 
-export default async function TasksPage() {
+export default async function TasksPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ view?: string }>;
+}) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -22,19 +27,30 @@ export default async function TasksPage() {
     .single();
   if (!profile) redirect("/onboarding");
 
+  // Honour defaultTaskView pref: Kanban users land on /boards when they
+  // click "Tasks" in the nav. `?view=list` on the URL explicitly opts into
+  // the list regardless of preference (for bookmarked links etc.).
+  const resolvedSearch = (await searchParams) ?? {};
+  if (resolvedSearch.view !== "list") {
+    const prefs = await getUserPreferences();
+    if (prefs.defaultTaskView === "board") redirect("/boards");
+  }
+
   const workspaceId = await getActiveWorkspaceId();
 
+  // Workspace-wide task list — RLS handles access (workspace-editor or owner
+  // for private items). Dropping .eq("user_id", user.id) is intentional:
+  // collaborators in the same workspace now see each other's non-private tasks.
   const tasksQuery = supabase
     .from("tasks")
     .select("*")
-    .eq("user_id", user.id)
     .order("due_date", { ascending: true })
     .order("priority", { ascending: false })
     .order("created_at", { ascending: false });
 
   const { data: tasks } = workspaceId
     ? await tasksQuery.eq("workspace_id", workspaceId)
-    : await tasksQuery;
+    : await tasksQuery.eq("user_id", user.id);
 
   return (
     <div className="space-y-6">

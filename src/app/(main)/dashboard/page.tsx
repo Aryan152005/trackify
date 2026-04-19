@@ -140,6 +140,25 @@ export default async function DashboardPage() {
         }
       />
 
+      {/* Gentle pointer to the Today surface for quick capture + focus. The
+          dashboard stays the primary landing — this is just a shortcut. */}
+      <Link
+        href="/today"
+        className="flex items-center justify-between gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm transition hover:bg-indigo-100 dark:border-indigo-900/50 dark:bg-indigo-950/30 dark:hover:bg-indigo-950/50"
+      >
+        <div>
+          <p className="font-semibold text-indigo-900 dark:text-indigo-200">
+            Jump into focus mode
+          </p>
+          <p className="mt-0.5 text-xs text-indigo-700/80 dark:text-indigo-300/80">
+            Today shows your focus tasks, reminders due now, and a one-line capture box — fastest path to &ldquo;do the thing&rdquo;.
+          </p>
+        </div>
+        <span className="shrink-0 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white dark:bg-indigo-500">
+          Open Today →
+        </span>
+      </Link>
+
       {/* Stats Grid */}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         <Card>

@@ -78,9 +78,9 @@ const STEPS: Step[] = [
     gradient: "from-violet-500 to-fuchsia-500",
     title: "Smart Mindmap",
     subtitle: "AI-style auto-connections",
-    body: "Auto-generates a map of all your tasks, reminders, entries, and notes — connects them by keywords and dates. One-click actions to link related items.",
-    tryUrl: "/mindmaps/smart",
-    tryLabel: "Try Smart Mindmap",
+    body: "Auto-generates a map of all your tasks, reminders, entries, and notes — connects them by keywords and dates. One-click actions to link related items. Lives at the top of Mind Maps.",
+    tryUrl: "/mindmaps",
+    tryLabel: "Open Mind Maps",
   },
   {
     icon: BarChart3,

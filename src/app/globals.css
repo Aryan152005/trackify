@@ -2,24 +2,56 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Theme variables — driven by the `.dark` class that next-themes adds to
+ * <html>, NOT the OS `prefers-color-scheme` media query. Using the media
+ * query meant that a user on an OS in dark-mode who explicitly picked
+ * "Light" in our toggle kept a dark <body> (Tailwind's `dark:` classes
+ * flipped, but the body variable didn't). Scoping to the class keeps
+ * <body> in lockstep with every other surface.
+ */
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --muted-background: #fafafa;
+  /* --accent is overridden by PreferencesBootstrap per user pref. */
+  --accent: #6366f1;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --muted-background: #111111;
 }
 
+/*
+ * Density tokens — controlled by html[data-density]. Compact tightens list
+ * rows; comfortable is the default breathing room. Any component that opts
+ * in with class `density-row` picks up the active setting automatically.
+ */
+html[data-density="compact"] .density-row {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+  font-size: 0.8125rem;
+  line-height: 1.15rem;
+}
+html[data-density="comfortable"] .density-row {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+html,
 body {
   background: var(--background);
   color: var(--foreground);
+  min-height: 100%;
+}
+
+body {
   font-family: var(--font-inter), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 150ms ease, color 150ms ease;
 }
 
 /* Smooth scrolling */
@@ -58,4 +90,99 @@ html {
 :focus-visible {
   outline: 2px solid #4f46e5;
   outline-offset: 2px;
+}
+
+/*
+ * Skeleton shimmer — adds a subtle moving gradient over placeholder blocks
+ * so a "loading" state doesn't feel frozen. Apply via the `.skeleton` class
+ * or reuse `animate-shimmer` on any element.
+ */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgb(228 228 231) 0%,
+    rgb(244 244 245) 50%,
+    rgb(228 228 231) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+  border-radius: 0.5rem;
+}
+.dark .skeleton {
+  background: linear-gradient(
+    90deg,
+    rgb(39 39 42) 0%,
+    rgb(63 63 70) 50%,
+    rgb(39 39 42) 100%
+  );
+  background-size: 200% 100%;
+}
+
+/*
+ * Card micro-interaction: a very subtle lift + shadow on hover, cheap
+ * on GPU (transforms a single element). Class-based opt-in so we don't
+ * apply this to fixed cards (e.g. dialog content).
+ */
+.card-lift {
+  transition: transform 150ms cubic-bezier(0.22, 0.61, 0.36, 1),
+              box-shadow 150ms ease;
+  will-change: transform;
+}
+.card-lift:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 18px -8px rgb(24 24 27 / 0.15);
+}
+.dark .card-lift:hover {
+  box-shadow: 0 4px 24px -8px rgb(0 0 0 / 0.6);
+}
+
+/*
+ * Button press — quick scale-down so taps feel physical. Applied to
+ * <button>/[role=button] via :active so it's universal.
+ */
+@media (hover: hover) {
+  button:active:not(:disabled),
+  [role="button"]:active:not([aria-disabled="true"]) {
+    transform: scale(0.97);
+    transition: transform 80ms ease-out;
+  }
+}
+
+/*
+ * Mobile bottom-sheet for Radix Dialog.Content. On screens ≤640px a
+ * centred modal feels cramped and tap-unfriendly; slide the content up
+ * from the bottom instead. Apply via the `sheet-on-mobile` class.
+ */
+@media (max-width: 640px) {
+  .sheet-on-mobile {
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
+    bottom: 0 !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    padding-bottom: calc(env(safe-area-inset-bottom) + 1.25rem) !important;
+    animation: sheet-up 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+  @keyframes sheet-up {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+  }
+}
+
+/*
+ * Respect prefers-reduced-motion across all of the above.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; background: rgb(228 228 231); }
+  .dark .skeleton { background: rgb(39 39 42); }
+  .card-lift:hover { transform: none; box-shadow: none; }
+  button:active:not(:disabled) { transform: none; }
 }

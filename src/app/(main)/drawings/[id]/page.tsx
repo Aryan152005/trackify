@@ -11,6 +11,7 @@ import {
 } from "@/lib/drawings/actions";
 import { AnimatedPage } from "@/components/ui/animated-layout";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ArrowLeft, Loader2, Trash2, Check, Cloud } from "lucide-react";
 import Link from "next/link";
 import type { Drawing } from "@/lib/types/calendar";
@@ -49,10 +50,9 @@ export default function DrawingDetailPage() {
     "saved" | "saving" | "unsaved" | "idle"
   >("idle");
   const [deleting, setDeleting] = useState(false);
-  const [remoteUpdate, setRemoteUpdate] = useState<{ elements?: unknown[]; appState?: Record<string, unknown> } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const selfIdRef = useRef<string>("");
 
   // -----------------------------------------------------------------------
   // Fetch drawing
@@ -90,61 +90,13 @@ export default function DrawingDetailPage() {
     };
   }, []);
 
-  // Real-time collaborative drawing via a Supabase broadcast channel.
-  // Each user publishes their local scene, peers apply it via updateScene.
-  const channelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
-  useEffect(() => {
-    if (!drawingId) return;
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
-      selfIdRef.current = data.user?.id ?? Math.random().toString(36).slice(2);
-    });
-    const channel = supabase.channel(`drawing-scene-${drawingId}`, {
-      config: { broadcast: { self: false } },
-    });
-    channel.on("broadcast", { event: "scene" }, (payload) => {
-      const p = payload.payload as { from: string; elements?: unknown[] };
-      if (!p || p.from === selfIdRef.current) return;
-      // Only apply elements — keep local appState (tool, zoom, camera) intact.
-      setRemoteUpdate({ elements: p.elements });
-    });
-    channel.subscribe();
-    channelRef.current = channel;
-    return () => {
-      supabase.removeChannel(channel);
-      channelRef.current = null;
-    };
-  }, [drawingId]);
-
-  // -----------------------------------------------------------------------
-  // Auto-save handler (called by TldrawWrapper on change, already debounced)
-  // -----------------------------------------------------------------------
-
-  const lastBroadcastSigRef = useRef<string>("");
+  // Legacy-JSON save: the Yjs-backed TldrawWrapper owns real-time collab +
+  // binary state persistence now, but we still write the JSON scene to the
+  // `drawings.data` column so exports and any pre-Yjs viewer keep working.
   const handleDrawingChange = useCallback(
     (data: Record<string, unknown>) => {
       setSaveStatus((prev) => (prev === "unsaved" || prev === "saving" ? prev : "unsaved"));
-
-      // Broadcast ONLY the canvas elements, and only when they actually changed.
-      // appState holds per-user UI state (tool, zoom, camera, selection) so each
-      // user stays independent — Figma/Canva behaviour.
-      const elements = ((data as { elements?: unknown[] }).elements ?? []) as Array<{ id: string; version: number }>;
-      // Cheap signature: total count + each element's version. Excalidraw bumps
-      // `version` on every mutation, so we send only when something actually moved.
-      const sig = `${elements.length}:${elements.map((e) => `${e.id}@${e.version}`).join(",")}`;
-      if (channelRef.current && sig !== lastBroadcastSigRef.current) {
-        lastBroadcastSigRef.current = sig;
-        channelRef.current.send({
-          type: "broadcast",
-          event: "scene",
-          payload: { from: selfIdRef.current, elements },
-        });
-      }
-
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current);
-      }
-
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(async () => {
         setSaveStatus("saving");
         try {
@@ -154,7 +106,7 @@ export default function DrawingDetailPage() {
           setSaveStatus("unsaved");
           toast.error(err instanceof Error ? err.message : "Failed to save drawing");
         }
-      }, 800);
+      }, 1500);
     },
     [drawingId]
   );
@@ -182,13 +134,17 @@ export default function DrawingDetailPage() {
   // -----------------------------------------------------------------------
 
   async function handleDelete() {
-    if (!window.confirm("Are you sure you want to delete this drawing?"))
-      return;
+    setConfirmDelete(true);
+  }
+
+  async function performDelete() {
     setDeleting(true);
     try {
       await deleteDrawing(drawingId);
+      toast.success("Drawing deleted");
       router.push("/drawings");
-    } catch {
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete drawing");
       setDeleting(false);
     }
   }
@@ -295,13 +251,24 @@ export default function DrawingDetailPage() {
           showCursors={true}
         />
 
-        {/* Canvas */}
+        {/* Canvas — collab + persistence handled inside via Yjs. */}
         <TldrawWrapper
+          drawingId={drawingId}
           initialData={drawing.data}
           onChange={handleDrawingChange}
-          remoteUpdate={remoteUpdate}
         />
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title="Delete this drawing?"
+        description={`"${title || "Untitled Drawing"}" will be permanently removed. This can't be undone.`}
+        confirmLabel="Delete"
+        cancelLabel="Keep"
+        variant="danger"
+        onConfirm={performDelete}
+      />
     </AnimatedPage>
   );
 }
