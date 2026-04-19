@@ -274,6 +274,19 @@ export function CommandPalette() {
   return (
     <>
       <SearchTrigger onClick={() => setOpen(true)} />
+      {/* Mobile-only icon trigger — the desktop SearchTrigger is
+          `hidden sm:flex` so on phones it renders nothing. This one
+          fills that gap; placed here so both triggers share the same
+          open state + keyboard handler. */}
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Search"
+        title="Search"
+        className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 sm:hidden dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
+      >
+        <Search className="h-4 w-4" />
+      </button>
 
       <AnimatePresence>
         {open && (

@@ -129,9 +129,10 @@ export function AppNav({ isAdmin = false }: { isAdmin?: boolean }) {
           <div className="hidden min-w-0 max-w-[180px] lg:block xl:max-w-[220px]">
             <WorkspaceSwitcher />
           </div>
-          <div className="hidden sm:block">
-            <CommandPalette />
-          </div>
+          {/* CommandPalette renders its own responsive trigger
+              (pill on desktop, icon on mobile). Both share the same
+              open state + Cmd/Ctrl-K shortcut. */}
+          <CommandPalette />
         </div>
 
         {/* Spacer — primary nav moved entirely into the drawer for a cleaner header */}
