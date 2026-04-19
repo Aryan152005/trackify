@@ -3,7 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as Y from "yjs";
 import { createClient } from "@/lib/supabase/client";
-import { loadYjsSnapshot, saveYjsSnapshot } from "@/lib/collab/snapshot-actions";
+import {
+  loadYjsSnapshot,
+  saveYjsSnapshot,
+  appendYjsUpdate,
+  loadYjsUpdates,
+  compactYjsUpdates,
+} from "@/lib/collab/snapshot-actions";
 import {
   SupabaseYjsProvider,
   awarenessColor,
@@ -97,6 +103,18 @@ export function useYjsDoc({ entity, id, enabled = true }: UseYjsDocOptions): Use
         const b64 = btoa(s);
         await saveYjsSnapshot(entity, id, b64);
       },
+      // Append-only update log (migration 039) — guarantees every
+      // single-keystroke local edit is on disk within 300 ms instead of
+      // waiting for the 3 s snapshot debounce. Fixes the "closed tab,
+      // changes lost" class of bugs.
+      appendUpdate: async (updateB64, clientId) =>
+        appendYjsUpdate(entity, id, updateB64, clientId),
+      loadUpdates: async () => loadYjsUpdates(entity, id),
+      compact: async (snapshotB64, upToId) =>
+        compactYjsUpdates(entity, id, snapshotB64, upToId),
+      beaconUrl: "/api/collab/append-update",
+      beaconEntity: entity,
+      beaconEntityId: id,
     });
     providerRef.current = p;
     setProvider(p);

@@ -50,10 +50,27 @@ export interface SupabaseYjsProviderOptions {
   awarenessState?: Record<string, unknown>;
   /** Load the persisted Y state (undefined or null = empty doc). */
   loadSnapshot: () => Promise<Uint8Array | null>;
-  /** Persist the current Y state. Called debounced on change. */
+  /** Persist the current Y state. Called during periodic compaction. */
   saveSnapshot: (state: Uint8Array) => Promise<void>;
   /** How often to write the snapshot to storage, in ms. Default 3000. */
   saveDebounceMs?: number;
+
+  // ── Append-only update log (migration 039). When these three are
+  //   present, the provider switches on "persist every update" mode —
+  //   single-keystroke durability, tab-close safety, cross-peer recovery.
+  /** Append one merged Yjs update to the durable log. Returns the new row id. */
+  appendUpdate?: (updateB64: string, clientId: string) => Promise<number>;
+  /** Load every log entry for this entity (ordered). Applied after snapshot. */
+  loadUpdates?: () => Promise<{ id: number; update_b64: string }[]>;
+  /** Save full snapshot + delete log rows with id <= upToId. */
+  compact?: (snapshotB64: string, upToId: number) => Promise<void>;
+  /** Tab-close beacon target — typically `/api/collab/append-update`. */
+  beaconUrl?: string;
+  /** Entity identity for the beacon payload (url-path-safe). */
+  beaconEntity?: string;
+  beaconEntityId?: string;
+  /** Per-update batch window, default 300 ms. */
+  appendDebounceMs?: number;
 }
 
 export class SupabaseYjsProvider {
@@ -66,6 +83,16 @@ export class SupabaseYjsProvider {
   private destroyed = false;
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private lastSavedBytes: Uint8Array | null = null;
+
+  // ── Update-log state.
+  /** Pending local updates since last appendFlush. Merged before send. */
+  private pendingUpdates: Uint8Array[] = [];
+  /** Debounce timer for appendFlush. */
+  private appendTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Max log row id we've applied (ours or fetched). Used as compact cursor. */
+  private maxAppliedLogId = 0;
+  /** Compaction timer — runs periodically to snapshot + truncate. */
+  private compactTimer: ReturnType<typeof setInterval> | null = null;
 
   /** Resolves once the initial snapshot has been loaded (so the UI can render). */
   readonly ready: Promise<void>;
@@ -100,6 +127,26 @@ export class SupabaseYjsProvider {
     }
     if (this.destroyed) return;
 
+    // 1b. Replay any unmerged log entries on top of the snapshot. These
+    // are updates other peers (or this user from a prior tab) persisted
+    // but that weren't yet folded into the snapshot. Without this step,
+    // recovering from "tab closed mid-edit" is impossible.
+    if (this.opts.loadUpdates) {
+      try {
+        const entries = await this.opts.loadUpdates();
+        for (const entry of entries) {
+          const bytes = fromB64(entry.update_b64);
+          Y.applyUpdate(this.doc, bytes, this);
+          if (entry.id > this.maxAppliedLogId) {
+            this.maxAppliedLogId = entry.id;
+          }
+        }
+      } catch {
+        // Non-fatal — fall back to snapshot-only.
+      }
+    }
+    if (this.destroyed) return;
+
     // 2. Subscribe to Realtime broadcast.
     const supabase = createClient();
     this.channel = supabase.channel(this.opts.channelName, {
@@ -129,9 +176,20 @@ export class SupabaseYjsProvider {
     this.doc.on("update", this.onDocUpdate);
     this.awareness.on("update", this.onAwarenessUpdate);
 
-    // 5. Cleanup: remove our awareness state when the tab is closed.
+    // 5. Cleanup: remove our awareness state when the tab is closed, and
+    // use the last unload moment to flush any pending update via a
+    // keepalive fetch so the final stroke doesn't die with the tab.
     if (typeof window !== "undefined") {
       window.addEventListener("beforeunload", this.onBeforeUnload);
+      window.addEventListener("pagehide", this.onBeforeUnload);
+    }
+
+    // 6. Kick off periodic compaction — every 60s, write a fresh snapshot
+    // and delete folded-in log rows. Keeps the log table bounded.
+    if (this.opts.compact) {
+      this.compactTimer = setInterval(() => {
+        void this.compact();
+      }, 60_000);
     }
   }
 
@@ -139,8 +197,18 @@ export class SupabaseYjsProvider {
     // Ignore updates that came FROM us (we applied a peer's update with
     // `this` as origin inside onMessage — don't broadcast it back).
     if (origin === this) return;
+
+    // 1. Realtime: broadcast to peers for instant-collab.
     this.send({ kind: "update", from: this.clientId, update: toB64(update) });
-    this.scheduleSave();
+
+    // 2. Durable: queue for the update log. If the caller didn't wire the
+    // log up, fall back to the old snapshot-debounce behavior.
+    if (this.opts.appendUpdate) {
+      this.pendingUpdates.push(update);
+      this.scheduleAppend();
+    } else {
+      this.scheduleSave();
+    }
   };
 
   private onAwarenessUpdate = (
@@ -209,7 +277,7 @@ export class SupabaseYjsProvider {
     }, ms);
   }
 
-  /** Force-persist the current Yjs state to storage. */
+  /** Force-persist the current Yjs state to storage (legacy snapshot mode). */
   async flush() {
     if (this.destroyed) return;
     try {
@@ -223,7 +291,91 @@ export class SupabaseYjsProvider {
     }
   }
 
+  // ── Append-log plumbing.
+  private scheduleAppend() {
+    if (this.appendTimer) return; // already queued
+    const ms = this.opts.appendDebounceMs ?? 300;
+    this.appendTimer = setTimeout(() => {
+      this.appendTimer = null;
+      void this.flushAppend();
+    }, ms);
+  }
+
+  /**
+   * Merge all pending local updates into a single Yjs update and persist
+   * it to the log. Uses Y.mergeUpdates so a burst of small edits lands
+   * as one row, keeping the log dense rather than one row per keystroke.
+   */
+  private async flushAppend() {
+    if (this.destroyed) return;
+    if (!this.opts.appendUpdate) return;
+    if (this.pendingUpdates.length === 0) return;
+    const batch = this.pendingUpdates;
+    this.pendingUpdates = [];
+    try {
+      const merged =
+        batch.length === 1 ? batch[0] : Y.mergeUpdates(batch);
+      const rowId = await this.opts.appendUpdate(toB64(merged), this.clientId);
+      if (rowId > this.maxAppliedLogId) this.maxAppliedLogId = rowId;
+    } catch {
+      // On failure, put them back so the next tick / compact retries.
+      this.pendingUpdates.unshift(...batch);
+    }
+  }
+
+  /** Snapshot the current state and delete now-redundant log rows. */
+  private async compact() {
+    if (this.destroyed) return;
+    if (!this.opts.compact) return;
+    // Fold any pending in-memory updates into the log first so they
+    // become eligible for deletion in this pass.
+    await this.flushAppend();
+    try {
+      const bytes = Y.encodeStateAsUpdate(this.doc);
+      await this.opts.compact(toB64(bytes), this.maxAppliedLogId);
+      this.lastSavedBytes = bytes;
+    } catch {
+      // Non-fatal — next tick retries.
+    }
+  }
+
   private onBeforeUnload = () => {
+    // Best-effort last-chance persist. `fetch({ keepalive: true })` keeps
+    // the request alive after the tab closes (max ~64 KB payload —
+    // Yjs updates are usually far smaller). If the log path isn't wired,
+    // skip — legacy snapshot mode loses last ~3s of edits regardless.
+    if (
+      this.opts.beaconUrl &&
+      this.opts.beaconEntity &&
+      this.opts.beaconEntityId &&
+      this.pendingUpdates.length > 0 &&
+      typeof fetch !== "undefined"
+    ) {
+      try {
+        const merged =
+          this.pendingUpdates.length === 1
+            ? this.pendingUpdates[0]
+            : Y.mergeUpdates(this.pendingUpdates);
+        const payload = JSON.stringify({
+          entity: this.opts.beaconEntity,
+          entityId: this.opts.beaconEntityId,
+          updateB64: toB64(merged),
+          clientId: this.clientId,
+        });
+        fetch(this.opts.beaconUrl, {
+          method: "POST",
+          keepalive: true,
+          headers: { "Content-Type": "application/json" },
+          body: payload,
+        }).catch(() => {
+          /* page is unloading — we tried */
+        });
+        this.pendingUpdates = [];
+      } catch {
+        /* swallow */
+      }
+    }
+
     removeAwarenessStates(
       this.awareness,
       [this.doc.clientID],
@@ -236,12 +388,32 @@ export class SupabaseYjsProvider {
     if (this.destroyed) return;
     this.destroyed = true;
     if (this.saveTimer) clearTimeout(this.saveTimer);
+    if (this.appendTimer) clearTimeout(this.appendTimer);
+    if (this.compactTimer) clearInterval(this.compactTimer);
     this.doc.off("update", this.onDocUpdate);
     this.awareness.off("update", this.onAwarenessUpdate);
     if (typeof window !== "undefined") {
       window.removeEventListener("beforeunload", this.onBeforeUnload);
+      window.removeEventListener("pagehide", this.onBeforeUnload);
     }
-    await this.flush();
+
+    // Before ripping down the channel, guarantee the log is up-to-date
+    // and then compact one last time. Order matters: append any pending
+    // updates FIRST (so other peers replaying later pick them up), then
+    // save a snapshot that folds them in + delete the now-merged rows.
+    if (this.opts.appendUpdate) {
+      // Reset destroyed briefly so flushAppend + compact actually run.
+      this.destroyed = false;
+      try {
+        await this.flushAppend();
+        await this.compact();
+      } finally {
+        this.destroyed = true;
+      }
+    } else {
+      await this.flush();
+    }
+
     if (this.channel) {
       try {
         removeAwarenessStates(
