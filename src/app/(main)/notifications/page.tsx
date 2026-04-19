@@ -58,6 +58,21 @@ const TYPE_FILTER_OPTIONS: Array<{ id: TypeFilter; label: string }> = [
   { id: "comment", label: "Comments" },
 ];
 
+/**
+ * Priority order used when sorting notifications INSIDE a date bucket.
+ * Lower number = more urgent. A direct @mention should always float to
+ * the top even if a comment arrived later — users were missing mentions
+ * buried under auto-reminders.
+ */
+const TYPE_PRIORITY: Record<NotificationType, number> = {
+  mention: 0,
+  assignment: 1,
+  request: 2,
+  reminder: 3,
+  comment: 4,
+  nudge: 5,
+};
+
 export default function NotificationsPage() {
   const workspaceId = useWorkspaceId();
   const [userId, setUserId] = useState<string | null>(null);
@@ -159,10 +174,16 @@ export default function NotificationsPage() {
       list.push(n);
       map.set(b, list);
     }
-    // Within each bucket, unread first then newest
+    // Within each bucket: unread first → by type priority (mentions/
+    // assignments before reminders/nudges) → newest first. This matches
+    // how a human triages: "what needs my answer?" beats "what am I
+    // subscribed to?" beats "what's old?".
     for (const list of map.values()) {
       list.sort((a, b) => {
         if (a.is_read !== b.is_read) return a.is_read ? 1 : -1;
+        const pa = TYPE_PRIORITY[a.type] ?? 99;
+        const pb = TYPE_PRIORITY[b.type] ?? 99;
+        if (pa !== pb) return pa - pb;
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
     }

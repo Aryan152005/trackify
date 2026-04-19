@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
+import { StatCard } from "@/components/ui/stat-card";
 import { QuickCapture } from "@/components/today/quick-capture";
 import { TaskRow } from "@/components/tasks/task-row";
 import {
@@ -71,25 +72,25 @@ export default async function TodayPage() {
 
       {/* ── Stats strip ──────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile
+        <StatCard
           icon={<Flame className="h-4 w-4 text-orange-500" />}
           label="Streak"
           value={`${snap.stats.streak}d`}
           sub={snap.stats.streak > 0 ? "Keep it going" : "Log one entry"}
         />
-        <StatTile
+        <StatCard
           icon={<CheckCircle2 className="h-4 w-4 text-emerald-500" />}
           label="Done today"
-          value={String(snap.stats.tasksDoneToday)}
+          value={snap.stats.tasksDoneToday}
           sub={snap.stats.tasksDoneToday > 0 ? "Shipped" : "Nothing yet"}
         />
-        <StatTile
+        <StatCard
           icon={<Sparkles className="h-4 w-4 text-indigo-500" />}
           label="Week score"
           value={snap.stats.weekScoreAvg != null ? `${snap.stats.weekScoreAvg}/10` : "—"}
           sub="Avg productivity"
         />
-        <StatTile
+        <StatCard
           icon={<Clock className="h-4 w-4 text-sky-500" />}
           label="Focus"
           value={
@@ -428,30 +429,6 @@ export default async function TodayPage() {
   );
 }
 
-function StatTile({
-  icon,
-  label,
-  value,
-  sub,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  sub: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="p-3">
-        <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-          {icon}
-          {label}
-        </div>
-        <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-zinc-50">{value}</p>
-        <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{sub}</p>
-      </CardContent>
-    </Card>
-  );
-}
 
 function JumpLink({ href, label, icon }: { href: string; label: string; icon: React.ReactNode }) {
   return (

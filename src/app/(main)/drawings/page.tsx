@@ -106,6 +106,7 @@ export default async function DrawingsPage() {
             icon={<Pencil className="h-6 w-6" />}
             title="No drawings yet"
             description="Create your first drawing to start sketching and collaborating visually."
+            hint="Whiteboard a system, doodle an idea, sketch a flow — Excalidraw + realtime collab means teammates see your strokes as they land."
           >
             <form action={handleCreate} className="mt-2">
               <Button type="submit" size="sm">

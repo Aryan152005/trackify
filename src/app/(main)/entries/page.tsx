@@ -74,6 +74,7 @@ export default async function EntriesPage() {
           icon={<FileText className="h-6 w-6" />}
           title="No entries yet"
           description="Start logging your daily work to build momentum and see your progress."
+          hint="Two minutes a day — what you shipped, what slowed you down — and after a month you'll spot patterns you'd never notice otherwise."
           actionLabel="Add entry"
           actionHref="/entries/new"
         />

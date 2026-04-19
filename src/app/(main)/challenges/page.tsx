@@ -48,6 +48,7 @@ export default async function ChallengesPage() {
           icon={<Target className="h-6 w-6" />}
           title="No challenges yet"
           description="Start a 21-day habit, a daily kanban plan, or a week-by-week roadmap."
+          hint="Pick one thing to get better at for the next three weeks — showing up is what compounds, not any single day."
           actionLabel="Start your first challenge"
           actionHref="/challenges/new"
         />

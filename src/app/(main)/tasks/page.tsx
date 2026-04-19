@@ -77,8 +77,11 @@ export default async function TasksPage({
           icon={<CheckSquare className="h-6 w-6" />}
           title="No tasks yet"
           description="Create your first task to start tracking work."
+          hint="Tasks are your working list — start with one thing you're doing right now and watch your day come together."
           actionLabel="New Task"
           actionHref="/tasks/new"
+          secondaryLabel="Try a board"
+          secondaryHref="/boards"
         />
       ) : (
         <TasksGroups tasks={tasks as Task[]} />

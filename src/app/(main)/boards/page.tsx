@@ -109,6 +109,7 @@ export default async function BoardsPage() {
             icon={<Columns3 className="h-6 w-6" />}
             title="No boards yet"
             description="Create your first Kanban board to start organizing tasks visually."
+            hint="Boards turn a flat task list into a pipeline — drag cards across columns as work moves from idea to shipped."
             actionLabel="Create Board"
             actionHref="/boards/new"
           />

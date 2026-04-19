@@ -63,6 +63,7 @@ export default async function RemindersPage() {
           icon={<Bell className="h-6 w-6" />}
           title="No reminders yet"
           description="Set your first reminder so nothing slips through the cracks."
+          hint="Reminders fire as push notifications in IST — perfect for follow-ups, prep time, and the stuff you'd otherwise re-discover at midnight."
           actionLabel="New Reminder"
           actionHref="/reminders/new"
         />

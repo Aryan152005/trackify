@@ -440,8 +440,9 @@ export default function WorkspaceMembersPage() {
                       </Select>
                       <button
                         onClick={() => handleRemove(member.id)}
-                        className="rounded-md p-1.5 text-zinc-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+                        className="flex h-9 w-9 items-center justify-center rounded-md text-zinc-400 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400"
                         title="Remove member"
+                        aria-label="Remove member"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>

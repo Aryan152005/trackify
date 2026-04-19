@@ -26,6 +26,20 @@ const typeIcons: Record<NotificationType, React.ReactNode> = {
   comment: <MessageSquare className="h-5 w-5 text-sky-500" />,
 };
 
+/**
+ * Left-accent colour on UNREAD rows so the type is scannable at a glance.
+ * Mentions + assignments use stronger colours so they stand out even in
+ * a long list; low-priority types get neutral indigo.
+ */
+const unreadAccent: Record<NotificationType, string> = {
+  mention: "border-l-purple-500 bg-purple-50/60 dark:bg-purple-950/20",
+  assignment: "border-l-indigo-500 bg-indigo-50/60 dark:bg-indigo-950/20",
+  reminder: "border-l-orange-500 bg-orange-50/50 dark:bg-orange-950/15",
+  request: "border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/15",
+  comment: "border-l-sky-500 bg-sky-50/40 dark:bg-sky-950/15",
+  nudge: "border-l-pink-500 bg-pink-50/40 dark:bg-pink-950/15",
+};
+
 interface NotificationListProps {
   notifications: Notification[];
   onMarkRead: (id: string) => void;
@@ -64,9 +78,9 @@ export function NotificationList({
           >
             <div
               className={cn(
-                "flex items-start gap-4 px-5 py-4 transition",
-                !n.is_read &&
-                  "border-l-3 border-l-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20"
+                "flex items-start gap-3 px-4 py-3 transition sm:gap-4 sm:px-5 sm:py-4",
+                !n.is_read && "border-l-4",
+                !n.is_read && (unreadAccent[n.type] ?? "border-l-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20")
               )}
             >
               <div className="mt-0.5 shrink-0">
@@ -74,18 +88,30 @@ export function NotificationList({
               </div>
 
               <div className="min-w-0 flex-1">
-                <p
-                  className={cn(
-                    "text-sm leading-snug",
-                    n.is_read
-                      ? "text-zinc-600 dark:text-zinc-400"
-                      : "font-semibold text-zinc-900 dark:text-zinc-50"
-                  )}
-                >
-                  {n.title}
-                </p>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
+                      !n.is_read
+                        ? "bg-white/60 text-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300"
+                        : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
+                    )}
+                  >
+                    {n.type}
+                  </span>
+                  <p
+                    className={cn(
+                      "min-w-0 text-sm leading-snug",
+                      n.is_read
+                        ? "text-zinc-600 dark:text-zinc-400"
+                        : "font-semibold text-zinc-900 dark:text-zinc-50"
+                    )}
+                  >
+                    {n.title}
+                  </p>
+                </div>
                 {n.body && (
-                  <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400 line-clamp-2">
+                  <p className="mt-1 text-sm text-zinc-500 line-clamp-2 dark:text-zinc-400">
                     {n.body}
                   </p>
                 )}
@@ -96,13 +122,14 @@ export function NotificationList({
                 </p>
               </div>
 
-              <div className="flex shrink-0 items-center gap-1">
+              <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
                 {!n.is_read && (
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8"
+                    className="h-9 w-9"
                     title="Mark as read"
+                    aria-label="Mark as read"
                     onClick={() => onMarkRead(n.id)}
                   >
                     <Check className="h-4 w-4" />
@@ -111,8 +138,9 @@ export function NotificationList({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-zinc-400 hover:text-red-500 dark:text-zinc-500 dark:hover:text-red-400"
+                  className="h-9 w-9 text-zinc-400 hover:text-red-500 dark:text-zinc-500 dark:hover:text-red-400"
                   title="Delete"
+                  aria-label="Delete notification"
                   onClick={() => onDelete(n.id)}
                 >
                   <Trash2 className="h-4 w-4" />
