@@ -13,6 +13,9 @@ import {
   Shield,
   Send,
   Users,
+  Mail,
+  Plus,
+  CheckCircle2,
 } from "lucide-react";
 import { listWorkspaceTeammates, nudgeTeammate } from "@/lib/collaboration/nudge-actions";
 import { toast } from "sonner";
@@ -23,6 +26,11 @@ import {
   getSharedLinks,
   createSharedLink,
   revokeSharedLink,
+  listLinkGrants,
+  addLinkGrant,
+  revokeLinkGrant,
+  type GrantPermission,
+  type ShareLinkGrant,
 } from "@/lib/collaboration/sharing-actions";
 import type { SharedLink, SharedLinkPermission } from "@/lib/types/collaboration";
 
@@ -98,6 +106,13 @@ export function ShareDialog({
   // New link form state
   const [permission, setPermission] = useState<SharedLinkPermission>("view");
   const [expiresAt, setExpiresAt] = useState<string>("");
+
+  // Per-link grant state. Keyed by link.id.
+  const [grantsByLink, setGrantsByLink] = useState<Record<string, ShareLinkGrant[]>>({});
+  const [expandedGrants, setExpandedGrants] = useState<Record<string, boolean>>({});
+  const [grantEmailInput, setGrantEmailInput] = useState<Record<string, string>>({});
+  const [grantPermInput, setGrantPermInput] = useState<Record<string, GrantPermission>>({});
+  const [grantAdding, setGrantAdding] = useState<Record<string, boolean>>({});
 
   // Direct teammate share
   interface Teammate { user_id: string; name: string; avatar_url: string | null; role: string }
@@ -190,6 +205,55 @@ export function ShareDialog({
       toast.success("Link copied to clipboard");
     } catch {
       toast.error("Failed to copy link");
+    }
+  };
+
+  const toggleGrants = async (linkId: string) => {
+    const nowOpen = !expandedGrants[linkId];
+    setExpandedGrants((prev) => ({ ...prev, [linkId]: nowOpen }));
+    if (nowOpen && !grantsByLink[linkId]) {
+      try {
+        const g = await listLinkGrants(linkId);
+        setGrantsByLink((prev) => ({ ...prev, [linkId]: g }));
+      } catch {
+        toast.error("Failed to load grants");
+      }
+    }
+  };
+
+  const handleAddGrant = async (linkId: string) => {
+    const email = (grantEmailInput[linkId] ?? "").trim().toLowerCase();
+    const perm = grantPermInput[linkId] ?? "view";
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error("Enter a valid email address");
+      return;
+    }
+    setGrantAdding((prev) => ({ ...prev, [linkId]: true }));
+    try {
+      const grant = await addLinkGrant({ linkId, email, permission: perm });
+      setGrantsByLink((prev) => ({
+        ...prev,
+        [linkId]: [grant, ...(prev[linkId] ?? []).filter((g) => g.id !== grant.id)],
+      }));
+      setGrantEmailInput((prev) => ({ ...prev, [linkId]: "" }));
+      toast.success("Access granted — we've emailed " + email);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to grant access");
+    } finally {
+      setGrantAdding((prev) => ({ ...prev, [linkId]: false }));
+    }
+  };
+
+  const handleRevokeGrant = async (linkId: string, grantId: string) => {
+    try {
+      await revokeLinkGrant(grantId);
+      setGrantsByLink((prev) => ({
+        ...prev,
+        [linkId]: (prev[linkId] ?? []).filter((g) => g.id !== grantId),
+      }));
+      toast.success("Access revoked");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to revoke access");
     }
   };
 
@@ -361,54 +425,176 @@ export function ShareDialog({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {links.map((link) => (
-                    <div
-                      key={link.id}
-                      className="flex items-center gap-3 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-800"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={cn(
-                              "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase",
-                              link.permission === "edit"
-                                ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                                : link.permission === "comment"
-                                  ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"
-                                  : "bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400"
-                            )}
+                  {links.map((link) => {
+                    const grants = grantsByLink[link.id] ?? [];
+                    const isExpanded = !!expandedGrants[link.id];
+                    const emailInput = grantEmailInput[link.id] ?? "";
+                    const permInput: GrantPermission = grantPermInput[link.id] ?? "view";
+                    const isAdding = !!grantAdding[link.id];
+                    return (
+                      <div
+                        key={link.id}
+                        className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-800"
+                      >
+                        <div className="flex items-center gap-3 p-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={cn(
+                                  "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase",
+                                  link.permission === "edit"
+                                    ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                                    : link.permission === "comment"
+                                      ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"
+                                      : "bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400"
+                                )}
+                              >
+                                {link.permission}
+                              </span>
+                              {link.expires_at && (
+                                <span className="text-[10px] text-zinc-400 dark:text-zinc-500">
+                                  Expires {formatDate(link.expires_at)}
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-1 truncate font-mono text-xs text-zinc-500 dark:text-zinc-400">
+                              {buildShareUrl(link.token)}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleCopy(link.token)}
+                              title="Copy link"
+                              className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-300"
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleRevoke(link.id)}
+                              title="Revoke link"
+                              className="rounded-lg p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Grant access by email — collapsible */}
+                        <div className="border-t border-zinc-100 dark:border-zinc-700">
+                          <button
+                            type="button"
+                            onClick={() => toggleGrants(link.id)}
+                            className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800/60"
                           >
-                            {link.permission}
-                          </span>
-                          {link.expires_at && (
-                            <span className="text-[10px] text-zinc-400 dark:text-zinc-500">
-                              Expires {formatDate(link.expires_at)}
+                            <span className="flex items-center gap-1.5">
+                              <Mail className="h-3 w-3" />
+                              Grant access by email
+                              {grants.length > 0 && (
+                                <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[9px] font-semibold text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                                  {grants.length}
+                                </span>
+                              )}
                             </span>
+                            <span className="text-[10px] opacity-60">{isExpanded ? "Hide" : "Manage"}</span>
+                          </button>
+
+                          {isExpanded && (
+                            <div className="space-y-3 border-t border-zinc-100 px-3 py-3 dark:border-zinc-700">
+                              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                                By default the link is view-only. Add someone&apos;s email below to upgrade them — an <strong>editor</strong> grant auto-adds them to the workspace on first open.
+                              </p>
+
+                              <div className="flex flex-col gap-2 sm:flex-row">
+                                <input
+                                  type="email"
+                                  placeholder="teammate@email.com"
+                                  value={emailInput}
+                                  onChange={(e) =>
+                                    setGrantEmailInput((prev) => ({ ...prev, [link.id]: e.target.value }))
+                                  }
+                                  className="flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+                                />
+                                <div className="flex gap-1">
+                                  {(["view", "editor"] as const).map((p) => (
+                                    <button
+                                      key={p}
+                                      type="button"
+                                      onClick={() =>
+                                        setGrantPermInput((prev) => ({ ...prev, [link.id]: p }))
+                                      }
+                                      className={cn(
+                                        "rounded-md border px-2 py-1 text-xs font-medium capitalize transition",
+                                        permInput === p
+                                          ? "border-indigo-500 bg-indigo-100 text-indigo-700 dark:border-indigo-400 dark:bg-indigo-900/40 dark:text-indigo-300"
+                                          : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+                                      )}
+                                    >
+                                      {p}
+                                    </button>
+                                  ))}
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleAddGrant(link.id)}
+                                    disabled={!emailInput.trim() || isAdding}
+                                    className="gap-1 px-2"
+                                  >
+                                    {isAdding ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    ) : (
+                                      <Plus className="h-3.5 w-3.5" />
+                                    )}
+                                    Add
+                                  </Button>
+                                </div>
+                              </div>
+
+                              {grants.length > 0 && (
+                                <ul className="divide-y divide-zinc-100 rounded-md border border-zinc-100 dark:divide-zinc-700 dark:border-zinc-700">
+                                  {grants.map((g) => (
+                                    <li
+                                      key={g.id}
+                                      className="flex items-center gap-2 px-2.5 py-1.5 text-xs"
+                                    >
+                                      <Mail className="h-3 w-3 shrink-0 text-zinc-400" />
+                                      <span className="truncate text-zinc-700 dark:text-zinc-300">{g.email}</span>
+                                      <span
+                                        className={cn(
+                                          "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase",
+                                          g.permission === "editor"
+                                            ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                                            : "bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400"
+                                        )}
+                                      >
+                                        {g.permission}
+                                      </span>
+                                      {g.first_used_at && (
+                                        <span
+                                          title={"First used " + formatDate(g.first_used_at)}
+                                          className="shrink-0 text-emerald-600 dark:text-emerald-400"
+                                        >
+                                          <CheckCircle2 className="h-3 w-3" />
+                                        </span>
+                                      )}
+                                      <div className="flex-1" />
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRevokeGrant(link.id, g.id)}
+                                        title="Revoke access"
+                                        className="rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </button>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
                           )}
                         </div>
-                        <p className="mt-1 truncate font-mono text-xs text-zinc-500 dark:text-zinc-400">
-                          {buildShareUrl(link.token)}
-                        </p>
                       </div>
-
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => handleCopy(link.token)}
-                          title="Copy link"
-                          className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-300"
-                        >
-                          <Copy className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleRevoke(link.id)}
-                          title="Revoke link"
-                          className="rounded-lg p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

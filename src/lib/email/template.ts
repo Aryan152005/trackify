@@ -431,6 +431,47 @@ export function invitationDeclinedEmail(
 }
 
 /**
+ * Grant-notification email — sent when someone grants an email address
+ * access to a shared link. Recipient may or may not have a Trackify
+ * account yet; PWA install steps are included for first-timers.
+ */
+export function shareGrantEmail(params: {
+  granteeEmail: string;
+  granterName: string;
+  granterEmail: string;
+  entityType: string;
+  entityTitle: string;
+  permission: "view" | "editor";
+  shareUrl: string;
+}): { subject: string; html: string } {
+  const label = params.entityType;
+  const permCopy = params.permission === "editor"
+    ? "edit access — you'll be added to the workspace as an editor on first click."
+    : "view access. You can read the content but not make changes.";
+  return {
+    subject: `${params.granterName} shared a ${label} with you on ${APP_NAME}`,
+    html: emailLayout(`
+      <h2 style="margin:0 0 16px;font-size:20px;color:#18181b">${params.granterName} shared a ${label} with you</h2>
+      <p style="margin:0 0 12px;color:#52525b;font-size:15px;line-height:1.6">
+        <strong>${params.granterName}</strong> (<span style="color:#71717a">${params.granterEmail}</span>)
+        granted you access to <strong>&ldquo;${params.entityTitle}&rdquo;</strong>
+        on ${APP_NAME}.
+      </p>
+      <div style="margin:0 0 16px;padding:14px 16px;background:#eef2ff;border-radius:10px;border-left:4px solid #6366f1">
+        <p style="margin:0;color:#4338ca;font-size:14px;font-weight:600">Your access: ${params.permission}</p>
+        <p style="margin:4px 0 0;color:#4338ca;font-size:13px;line-height:1.5">You have ${permCopy}</p>
+      </div>
+      ${buttonHtml("Open the " + label, params.shareUrl)}
+      <p style="margin:12px 0 0;color:#a1a1aa;font-size:12px">
+        This grant is tied to <strong>${params.granteeEmail}</strong> —
+        you'll be asked to sign in with that email the first time you open the link.
+      </p>
+      ${pwaInstallStepsHtml()}
+    `, `${params.granterName} shared a ${label} with you`),
+  };
+}
+
+/**
  * Generic "here's how to install the app" email — useful for ad-hoc admin
  * broadcasts to users who have an account but haven't installed the PWA yet.
  */

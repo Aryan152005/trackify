@@ -1,12 +1,43 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Globe, Lock, FileText, ClipboardList, Columns, BookOpen, Pencil as DrawIcon, Brain, Target } from "lucide-react";
+import { toast } from "sonner";
+import {
+  Globe,
+  Lock,
+  FileText,
+  ClipboardList,
+  Columns,
+  BookOpen,
+  Pencil as DrawIcon,
+  Brain,
+  Target,
+  Mail,
+  Plus,
+  Trash2,
+  Loader2,
+  CheckCircle2,
+  UserCheck,
+} from "lucide-react";
 import { BlockNoteReadOnly } from "@/components/shared/blocknote-readonly";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { Pencil } from "lucide-react";
+import {
+  listLinkGrants,
+  addLinkGrant,
+  revokeLinkGrant,
+  type GrantPermission,
+  type ShareLinkGrant,
+} from "@/lib/collaboration/sharing-actions";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+
+interface ViewerGrant {
+  id: string;
+  permission: GrantPermission;
+}
 
 interface SharedData {
   entity: Record<string, unknown>;
@@ -14,6 +45,9 @@ interface SharedData {
   permission: "view" | "comment" | "edit";
   workspaceName?: string;
   workspaceId?: string;
+  viewerGrant: ViewerGrant | null;
+  autoJoined: boolean;
+  linkId?: string;
 }
 
 const ENTITY_APP_URL: Record<string, (id: string) => string> = {
@@ -235,6 +269,54 @@ export default function SharedTokenPage() {
   const [loading, setLoading] = useState(true);
   const [canEditInApp, setCanEditInApp] = useState(false);
 
+  // Delegation panel state — only relevant when viewerGrant is set AND the
+  // viewer isn't already a workspace member (in which case they'd use the
+  // in-app share dialog instead).
+  const [grants, setGrants] = useState<ShareLinkGrant[]>([]);
+  const [grantsOpen, setGrantsOpen] = useState(false);
+  const [grantEmail, setGrantEmail] = useState("");
+  const [grantPerm, setGrantPerm] = useState<GrantPermission>("view");
+  const [grantAdding, setGrantAdding] = useState(false);
+
+  const loadGrants = useCallback(async (linkId: string) => {
+    try {
+      const g = await listLinkGrants(linkId);
+      setGrants(g);
+    } catch {
+      /* ignore — grantee may not have RLS visibility in some edge cases */
+    }
+  }, []);
+
+  const handleAddGrant = async () => {
+    if (!data?.linkId) return;
+    const email = grantEmail.trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error("Enter a valid email address");
+      return;
+    }
+    setGrantAdding(true);
+    try {
+      const g = await addLinkGrant({ linkId: data.linkId, email, permission: grantPerm });
+      setGrants((prev) => [g, ...prev.filter((x) => x.id !== g.id)]);
+      setGrantEmail("");
+      toast.success("Access granted — we've emailed " + email);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to grant access");
+    } finally {
+      setGrantAdding(false);
+    }
+  };
+
+  const handleRevokeGrant = async (grantId: string) => {
+    try {
+      await revokeLinkGrant(grantId);
+      setGrants((prev) => prev.filter((g) => g.id !== grantId));
+      toast.success("Access revoked");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to revoke access");
+    }
+  };
+
   useEffect(() => {
     async function fetchSharedContent() {
       try {
@@ -275,6 +357,19 @@ export default function SharedTokenPage() {
         }
         const json = await res.json();
         setData(json);
+
+        // If the API just auto-joined this viewer (editor grant on a
+        // non-member), they're now a workspace editor — redirect straight
+        // to the in-app editor so they don't see a redundant read-only
+        // preview.
+        if (json.autoJoined) {
+          const appUrl = ENTITY_APP_URL[json.entityType]?.((json.entity?.id as string) || "");
+          if (appUrl) {
+            toast.success("You now have editor access to this workspace");
+            router.replace(appUrl);
+            return;
+          }
+        }
 
         // If the current browser is signed in AND belongs to the workspace
         // that owns this share link, they can edit in the full app — show
@@ -345,7 +440,7 @@ export default function SharedTokenPage() {
   return (
     <div className="mx-auto max-w-3xl">
       {/* Shared banner */}
-      <div className="mb-6 flex flex-wrap items-center gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-2.5 dark:border-indigo-900/40 dark:bg-indigo-950/20">
+      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-2.5 dark:border-indigo-900/40 dark:bg-indigo-950/20">
         <Globe className="h-4 w-4 text-indigo-500" />
         <span className="text-sm text-indigo-700 dark:text-indigo-300">
           Shared{data.workspaceName ? ` by ${data.workspaceName}` : ""}
@@ -357,6 +452,20 @@ export default function SharedTokenPage() {
             ? "Can comment"
             : "Can edit"}
         </span>
+        {data.viewerGrant && (
+          <span
+            title="You have a personal grant on this link"
+            className={cn(
+              "inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-medium",
+              data.viewerGrant.permission === "editor"
+                ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+            )}
+          >
+            <UserCheck className="h-3 w-3" />
+            {data.viewerGrant.permission === "editor" ? "Editor access" : "View access"}
+          </span>
+        )}
         {canEditInApp && ENTITY_APP_URL[data.entityType] && (
           <Link
             href={ENTITY_APP_URL[data.entityType]((data.entity.id as string) || "")}
@@ -367,6 +476,130 @@ export default function SharedTokenPage() {
           </Link>
         )}
       </div>
+
+      {/* Delegation panel — view-grantees can forward access to others.
+          Hidden for workspace members (they'd be auto-redirected above and
+          manage grants from the in-app share dialog). */}
+      {data.viewerGrant && data.linkId && !canEditInApp && (
+        <div className="mb-6 rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+          <button
+            type="button"
+            onClick={() => {
+              const next = !grantsOpen;
+              setGrantsOpen(next);
+              if (next && grants.length === 0 && data.linkId) loadGrants(data.linkId);
+            }}
+            className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+          >
+            <span className="flex items-center gap-2">
+              <Mail className="h-4 w-4 text-indigo-500" />
+              Share access with someone else
+              {grants.length > 0 && (
+                <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                  {grants.length}
+                </span>
+              )}
+            </span>
+            <span className="text-xs opacity-60">{grantsOpen ? "Hide" : "Manage"}</span>
+          </button>
+
+          {grantsOpen && (
+            <div className="space-y-3 border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                You can invite others to this {data.entityType}.
+                {data.viewerGrant.permission === "editor"
+                  ? " You hold editor access, so you can grant either level."
+                  : " You hold view access, so you can only grant view."}
+              </p>
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  type="email"
+                  placeholder="person@email.com"
+                  value={grantEmail}
+                  onChange={(e) => setGrantEmail(e.target.value)}
+                  className="flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                />
+                <div className="flex gap-1">
+                  {(["view", "editor"] as const).map((p) => {
+                    const canPick = p === "view" || data.viewerGrant?.permission === "editor";
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        disabled={!canPick}
+                        onClick={() => canPick && setGrantPerm(p)}
+                        title={canPick ? "" : "You only hold view access — can't issue editor grants"}
+                        className={cn(
+                          "rounded-md border px-2 py-1 text-xs font-medium capitalize transition",
+                          !canPick && "cursor-not-allowed opacity-40",
+                          grantPerm === p && canPick
+                            ? "border-indigo-500 bg-indigo-100 text-indigo-700 dark:border-indigo-400 dark:bg-indigo-900/40 dark:text-indigo-300"
+                            : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400",
+                        )}
+                      >
+                        {p}
+                      </button>
+                    );
+                  })}
+                  <Button
+                    size="sm"
+                    onClick={handleAddGrant}
+                    disabled={!grantEmail.trim() || grantAdding}
+                    className="gap-1 px-2"
+                  >
+                    {grantAdding ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Plus className="h-3.5 w-3.5" />
+                    )}
+                    Invite
+                  </Button>
+                </div>
+              </div>
+
+              {grants.length > 0 ? (
+                <ul className="divide-y divide-zinc-100 rounded-md border border-zinc-100 dark:divide-zinc-800 dark:border-zinc-800">
+                  {grants.map((g) => (
+                    <li key={g.id} className="flex items-center gap-2 px-2.5 py-1.5 text-xs">
+                      <Mail className="h-3 w-3 shrink-0 text-zinc-400" />
+                      <span className="truncate text-zinc-700 dark:text-zinc-300">{g.email}</span>
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase",
+                          g.permission === "editor"
+                            ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                            : "bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400",
+                        )}
+                      >
+                        {g.permission}
+                      </span>
+                      {g.first_used_at && (
+                        <span title="Has opened the link" className="shrink-0 text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="h-3 w-3" />
+                        </span>
+                      )}
+                      <div className="flex-1" />
+                      <button
+                        type="button"
+                        onClick={() => handleRevokeGrant(g.id)}
+                        title="Revoke access"
+                        className="rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-[11px] italic text-zinc-400 dark:text-zinc-500">
+                  No one else invited yet.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Entity type indicator */}
       <div className="mb-4 flex items-center gap-2 text-zinc-400 dark:text-zinc-500">

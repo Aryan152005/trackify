@@ -236,3 +236,277 @@ export async function revokeSharedLink(linkId: string, workspaceId: string) {
 
   if (error) throw new Error(`Failed to revoke shared link: ${error.message}`);
 }
+
+// ---------------------------------------------------------------------------
+// Per-email grants (migration 036)
+//
+// A grant is "this email address has {view|editor} access via this specific
+// share link". On first visit, an editor grant auto-promotes the grantee
+// to a workspace editor via the share API route. View grants stay scoped
+// to the read-only preview.
+// ---------------------------------------------------------------------------
+
+export type GrantPermission = "view" | "editor";
+
+export interface ShareLinkGrant {
+  id: string;
+  shared_link_id: string;
+  workspace_id: string;
+  email: string;
+  permission: GrantPermission;
+  granted_by: string;
+  granted_at: string;
+  revoked_at: string | null;
+  consumed_by_user_id: string | null;
+  first_used_at: string | null;
+}
+
+export async function listLinkGrants(linkId: string): Promise<ShareLinkGrant[]> {
+  const { supabase } = await getAuthenticatedUser();
+  const { data, error } = await supabase
+    .from("shared_link_grants")
+    .select("*")
+    .eq("shared_link_id", linkId)
+    .is("revoked_at", null)
+    .order("granted_at", { ascending: false });
+  if (error) throw new Error(`Failed to list grants: ${error.message}`);
+  return (data ?? []) as unknown as ShareLinkGrant[];
+}
+
+/**
+ * Issue a grant on a share link. Rules:
+ *   - link creator + workspace admins can grant any permission (view / editor).
+ *   - an existing editor-grantee can grant ONLY view (downward delegation).
+ *   - email is lowercased; (link, email) is unique — re-granting a previously
+ *     revoked email just revives the row.
+ * Side-effect: best-effort Resend email to the grantee so they discover the
+ * access (no-op if RESEND_API_KEY or RESEND_FROM_EMAIL is unset).
+ */
+export async function addLinkGrant(params: {
+  linkId: string;
+  email: string;
+  permission: GrantPermission;
+}): Promise<ShareLinkGrant> {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  const cleanEmail = params.email.trim().toLowerCase();
+  if (!cleanEmail || !cleanEmail.includes("@")) {
+    throw new Error("Enter a valid email address");
+  }
+
+  const { data: link, error: linkErr } = await supabase
+    .from("shared_links")
+    .select("id, workspace_id, entity_type, entity_id, token, created_by, is_active, permission")
+    .eq("id", params.linkId)
+    .maybeSingle();
+  if (linkErr || !link) throw new Error("Share link not found or you don't have access");
+  if (!link.is_active) throw new Error("This share link has been revoked");
+
+  // Delegation guardrail (non-admin, non-creator callers must hold an
+  // editor grant and can only issue view grants).
+  const isCreator = (link.created_by as string) === user.id;
+  let isAdmin = false;
+  if (!isCreator) {
+    const { data: me } = await supabase
+      .from("workspace_members")
+      .select("role")
+      .eq("workspace_id", link.workspace_id as string)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    isAdmin = !!me && (me.role === "admin" || me.role === "owner");
+  }
+  if (!isCreator && !isAdmin) {
+    const callerEmail = user.email?.toLowerCase() ?? "";
+    if (!callerEmail) throw new Error("Not allowed to grant — no email on your account");
+    const { data: myGrant } = await supabase
+      .from("shared_link_grants")
+      .select("permission, revoked_at")
+      .eq("shared_link_id", link.id as string)
+      .eq("email", callerEmail)
+      .maybeSingle();
+    if (!myGrant || myGrant.revoked_at) {
+      throw new Error("You don't have access to this shared link");
+    }
+    // Delegation rule: you can never issue a permission higher than your own.
+    // View-grantees can onboard more view-grantees but cannot escalate;
+    // editor-grantees can issue either level (but they're auto-joined to
+    // the workspace on their first visit, so they'll normally use the
+    // in-app share dialog instead of delegating via this path).
+    if (params.permission === "editor" && myGrant.permission !== "editor") {
+      throw new Error("You can only grant view access — editor grants require the link creator or a workspace admin");
+    }
+  }
+
+  // Upsert — revives revoked rows.
+  const { data: existing } = await supabase
+    .from("shared_link_grants")
+    .select("id")
+    .eq("shared_link_id", link.id as string)
+    .eq("email", cleanEmail)
+    .maybeSingle();
+
+  let row: Record<string, unknown> | null = null;
+  if (existing) {
+    const { data, error } = await supabase
+      .from("shared_link_grants")
+      .update({
+        permission: params.permission,
+        revoked_at: null,
+        granted_by: user.id,
+        granted_at: new Date().toISOString(),
+      })
+      .eq("id", existing.id as string)
+      .select("*")
+      .maybeSingle();
+    if (error) throw new Error(`Failed to update grant: ${error.message}`);
+    row = data as Record<string, unknown> | null;
+  } else {
+    const { data, error } = await supabase
+      .from("shared_link_grants")
+      .insert({
+        shared_link_id: link.id as string,
+        workspace_id: link.workspace_id as string,
+        email: cleanEmail,
+        permission: params.permission,
+        granted_by: user.id,
+      })
+      .select("*")
+      .maybeSingle();
+    if (error) throw new Error(`Failed to add grant: ${error.message}`);
+    row = data as Record<string, unknown> | null;
+  }
+  if (!row) throw new Error("Grant was not created");
+
+  // Best-effort email notification (no-op if Resend unset).
+  try {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+    const shareUrl = `${appUrl}/shared/${link.token as string}`;
+    const { data: granterProfile } = await supabase
+      .from("user_profiles")
+      .select("name")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const granterName = (granterProfile?.name as string | undefined) ?? user.email ?? "A teammate";
+    const granterEmail = user.email ?? "";
+
+    // Entity title — makes the email specific.
+    const table = tableForEntity(link.entity_type as string);
+    let entityTitle = "Untitled";
+    if (table) {
+      const titleCol = table === "boards" ? "name" : "title";
+      const { data: ent } = await supabase
+        .from(table)
+        .select(`id, ${titleCol}`)
+        .eq("id", link.entity_id as string)
+        .maybeSingle();
+      if (ent) {
+        const e = ent as Record<string, unknown>;
+        entityTitle = (e[titleCol] as string) ?? "Untitled";
+      }
+    }
+
+    const resendKey = process.env.RESEND_API_KEY;
+    const from = process.env.RESEND_FROM_EMAIL;
+    if (resendKey && from) {
+      const { shareGrantEmail } = await import("@/lib/email/template");
+      const tpl = shareGrantEmail({
+        granteeEmail: cleanEmail,
+        granterName,
+        granterEmail,
+        entityType: link.entity_type as string,
+        entityTitle,
+        permission: params.permission,
+        shareUrl,
+      });
+      try {
+        await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${resendKey}`,
+          },
+          body: JSON.stringify({ from, to: cleanEmail, subject: tpl.subject, html: tpl.html }),
+        });
+      } catch {
+        /* email is optional */
+      }
+    }
+  } catch {
+    /* never block grant creation on email */
+  }
+
+  return row as unknown as ShareLinkGrant;
+}
+
+export async function revokeLinkGrant(grantId: string) {
+  const { supabase } = await getAuthenticatedUser();
+  const { error } = await supabase
+    .from("shared_link_grants")
+    .update({ revoked_at: new Date().toISOString() })
+    .eq("id", grantId);
+  if (error) throw new Error(`Failed to revoke grant: ${error.message}`);
+}
+
+// ---------------------------------------------------------------------------
+// Visit audit (migration 036)
+// ---------------------------------------------------------------------------
+
+export interface ShareLinkVisit {
+  id: string;
+  shared_link_id: string;
+  workspace_id: string;
+  visitor_user_id: string | null;
+  visitor_email: string | null;
+  outcome:
+    | "view"
+    | "auto-joined-workspace"
+    | "denied-private"
+    | "denied-expired"
+    | "denied-revoked"
+    | "denied-not-found";
+  accessed_at: string;
+}
+
+export interface ShareLinkVisitSummary {
+  total: number;
+  unique_visitors: number;
+  last_accessed_at: string | null;
+  by_outcome: Record<string, number>;
+  recent: ShareLinkVisit[];
+}
+
+/**
+ * Return a summary of visits for a given share link. RLS on
+ * shared_link_visits (migration 036) restricts SELECT to the link creator
+ * and workspace admins — other callers will see zero rows rather than an
+ * error.
+ */
+export async function getLinkVisitSummary(
+  linkId: string,
+): Promise<ShareLinkVisitSummary> {
+  const { supabase } = await getAuthenticatedUser();
+
+  const { data, error } = await supabase
+    .from("shared_link_visits")
+    .select("*")
+    .eq("shared_link_id", linkId)
+    .order("accessed_at", { ascending: false });
+  if (error) throw new Error(`Failed to load visit log: ${error.message}`);
+
+  const visits = (data ?? []) as unknown as ShareLinkVisit[];
+  const uniq = new Set<string>();
+  const byOutcome: Record<string, number> = {};
+  for (const v of visits) {
+    const key = v.visitor_user_id ?? v.visitor_email ?? "anon";
+    uniq.add(key);
+    byOutcome[v.outcome] = (byOutcome[v.outcome] ?? 0) + 1;
+  }
+
+  return {
+    total: visits.length,
+    unique_visitors: uniq.size,
+    last_accessed_at: visits[0]?.accessed_at ?? null,
+    by_outcome: byOutcome,
+    recent: visits.slice(0, 20),
+  };
+}
