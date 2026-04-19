@@ -86,21 +86,60 @@ export async function nudgeTeammate(args: {
     .maybeSingle();
   if (!recipientMembership) throw new Error("Recipient isn't in this workspace");
 
-  // Sender name
+  // Sender display — we show BOTH the profile name and the email so the
+  // recipient has two ways to recognise who sent this (names can collide,
+  // emails don't). Falls back gracefully if the profile row is missing.
   const { data: senderProfile } = await admin
     .from("user_profiles")
     .select("name")
     .eq("user_id", user.id)
     .maybeSingle();
-  const senderName = (senderProfile?.name as string | undefined) ?? user.email?.split("@")[0] ?? "A teammate";
+  const senderName =
+    (senderProfile?.name as string | undefined) ?? user.email?.split("@")[0] ?? "A teammate";
+  const senderEmail = user.email ?? "";
 
-  const verb = args.action === "comment" ? "wants your comment on"
-    : args.action === "edit" ? "wants you to edit"
-    : args.action === "join" ? "is waiting for you on"
-    : "pinged you on";
+  // Human-friendly label per entity kind — used in the notification copy so
+  // "shared a drawing with you" reads naturally instead of "shared a page".
+  const ENTITY_LABEL: Record<EntityKind, string> = {
+    page: "note",
+    task: "task",
+    board: "board",
+    entry: "work entry",
+    drawing: "drawing",
+    mindmap: "mind map",
+    challenge: "challenge",
+  };
+  const label = ENTITY_LABEL[args.entityType];
 
-  const title = `${senderName} ${verb} "${args.entityTitle}"`;
-  const body = args.message?.trim() || "Tap to join them now.";
+  // Verb per action. The "view" / default case is what the ShareDialog's
+  // "share with a teammate" flow sends — we treat that as an explicit share.
+  const { title, body } = (() => {
+    const msg = args.message?.trim();
+    if (args.action === "comment") {
+      return {
+        title: `${senderName} wants your comment on a ${label}: "${args.entityTitle}"`,
+        body: msg || `${senderEmail ? senderEmail + " · " : ""}Tap to open and comment.`,
+      };
+    }
+    if (args.action === "edit") {
+      return {
+        title: `${senderName} wants you to edit a ${label}: "${args.entityTitle}"`,
+        body: msg || `${senderEmail ? senderEmail + " · " : ""}Tap to open the editor.`,
+      };
+    }
+    if (args.action === "join") {
+      return {
+        title: `${senderName} is waiting for you on a ${label}: "${args.entityTitle}"`,
+        body: msg || `${senderEmail ? senderEmail + " · " : ""}Tap to join now.`,
+      };
+    }
+    // Default / "view" — "share with teammate" path uses this.
+    return {
+      title: `${senderName} shared a ${label} with you: "${args.entityTitle}"`,
+      body: msg || `${senderEmail ? senderEmail + " · " : ""}Tap to open.`,
+    };
+  })();
+
   const url = ENTITY_URL[args.entityType](args.entityId);
 
   // 1. Insert in-app notification (visible via NotificationBell)

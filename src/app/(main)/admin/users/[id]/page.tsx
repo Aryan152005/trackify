@@ -8,6 +8,7 @@ import { formatIST, formatISTDate } from "@/lib/utils/datetime";
 import {
   Activity, AlertCircle, AlertTriangle, Info, Clock, Star, MessageSquare,
   CheckSquare, FileText, StickyNote, Columns3, Bell, AtSign, ClipboardList, Megaphone, Mail,
+  Link2,
 } from "lucide-react";
 
 export default async function AdminUserDetail({ params }: { params: { id: string } }) {
@@ -51,6 +52,11 @@ export default async function AdminUserDetail({ params }: { params: { id: string
         <StatCard icon={<StickyNote className="h-4 w-4" />} label="Pages" value={String(user.pages.length)} />
         <StatCard icon={<Columns3 className="h-4 w-4" />} label="Boards" value={String(user.boards.length)} />
         <StatCard icon={<Bell className="h-4 w-4" />} label="Reminders" value={String(user.reminders.length)} />
+        <StatCard
+          icon={<Link2 className="h-4 w-4" />}
+          label="Shared by them"
+          value={String((user.shares ?? []).filter((s) => s.is_active).length)}
+        />
         <StatCard icon={<Clock className="h-4 w-4" />} label="Tracked" value={`${totalMinutes}m`} />
         <StatCard
           icon={<Activity className="h-4 w-4" />}
@@ -361,6 +367,78 @@ export default async function AdminUserDetail({ params }: { params: { id: string
                 </li>
               ))}
             </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Share links created by this user */}
+      {user.shares && user.shares.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Link2 className="h-4 w-4 text-indigo-500" />
+              Share links created ({user.shares.length})
+            </CardTitle>
+            <CardDescription>
+              Every share link this user has generated — active first, revoked below. Useful for
+              auditing what they&apos;ve shared externally.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {user.shares.slice(0, 15).map((s) => (
+                <li
+                  key={s.id}
+                  className={`flex items-start justify-between gap-3 rounded-lg border border-zinc-100 p-3 dark:border-zinc-800 ${
+                    s.is_active ? "" : "opacity-60"
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                        {s.entity_type}
+                      </span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                          s.permission === "edit"
+                            ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                            : s.permission === "comment"
+                              ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"
+                              : "bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400"
+                        }`}
+                      >
+                        {s.permission}
+                      </span>
+                      <span className="truncate font-medium text-zinc-900 dark:text-zinc-100">
+                        {s.entity_title}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-zinc-400">
+                      Created {formatIST(s.created_at, {
+                        month: "short", day: "numeric", year: "numeric",
+                        hour: undefined, minute: undefined, hour12: undefined,
+                      })}
+                      {s.expires_at && ` · expires ${formatIST(s.expires_at, {
+                        month: "short", day: "numeric", year: "numeric",
+                        hour: undefined, minute: undefined, hour12: undefined,
+                      })}`}
+                    </p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                    s.is_active
+                      ? "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300"
+                      : "bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
+                  }`}>
+                    {s.is_active ? "active" : "revoked"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {user.shares.length > 15 && (
+              <p className="mt-3 text-center text-xs text-zinc-400">
+                +{user.shares.length - 15} older share links
+              </p>
+            )}
           </CardContent>
         </Card>
       )}

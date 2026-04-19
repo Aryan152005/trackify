@@ -60,10 +60,18 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  // If logged in and on login/signup, redirect to dashboard
+  // If logged in and on login/signup, respect ?next=… and bounce there.
+  // Previously we hard-forced /dashboard, which broke flows like
+  // /shared/{token} where a client-side redirect to /login?next=… should
+  // have sent the authenticated user right back to the share URL.
   if (user && (request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/signup")) {
+    const nextParam = request.nextUrl.searchParams.get("next");
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/dashboard";
+    redirectUrl.pathname =
+      nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//")
+        ? nextParam
+        : "/dashboard";
+    redirectUrl.search = ""; // clear ?next=… so we don't keep it in history
     return NextResponse.redirect(redirectUrl);
   }
 

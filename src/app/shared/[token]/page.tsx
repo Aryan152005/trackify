@@ -238,9 +238,23 @@ export default function SharedTokenPage() {
   useEffect(() => {
     async function fetchSharedContent() {
       try {
-        // Require login first — bounce to /login and return here after auth.
+        // Resolve the current user. In a fresh tab the Supabase client
+        // sometimes hasn't hydrated the session from cookies yet by the
+        // time this effect fires — racing to /login would then bounce
+        // authenticated users through /login → /dashboard (since
+        // middleware treats logged-in users on /login as "go home").
+        // Retry once after a short delay to give the cookie-backed
+        // session a chance to surface before we give up.
         const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
+        let {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) {
+          await new Promise((r) => setTimeout(r, 200));
+          ({
+            data: { user },
+          } = await supabase.auth.getUser());
+        }
         if (!user) {
           const next = encodeURIComponent(`/shared/${params.token}`);
           router.replace(`/login?next=${next}`);

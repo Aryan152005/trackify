@@ -286,6 +286,7 @@ export async function getUserDetail(userId: string) {
     { data: logs },
     { data: feedback },
     { data: timers },
+    { data: sharesCreated },
   ] = await Promise.all([
     admin.from("user_profiles").select("*").eq("user_id", userId).single(),
     // Full body so admin can read WHAT was written
@@ -315,9 +316,65 @@ export async function getUserDetail(userId: string) {
     // Timer sessions for time-on-platform signal
     admin.from("timer_sessions").select("id, duration_seconds, started_at, ended_at")
       .eq("user_id", userId).order("started_at", { ascending: false }).limit(30),
+    // Share links this user has CREATED — audit trail of what they've shared
+    // externally. Includes revoked links so admins can see historical activity.
+    admin.from("shared_links").select(
+      "id, workspace_id, entity_type, entity_id, permission, expires_at, is_active, created_at"
+    ).eq("created_by", userId).order("created_at", { ascending: false }).limit(30),
   ]);
 
   const { data: authData } = await admin.auth.admin.getUserById(userId);
+
+  // Resolve entity titles for the share links (polymorphic — need per-table lookup).
+  const shareRows = sharesCreated ?? [];
+  const byTable = new Map<string, string[]>();
+  const tableMap: Record<string, string> = {
+    page: "pages",
+    task: "tasks",
+    board: "boards",
+    entry: "work_entries",
+    drawing: "drawings",
+    mindmap: "mindmaps",
+    challenge: "challenges",
+  };
+  for (const s of shareRows) {
+    const table = tableMap[s.entity_type as string];
+    if (!table) continue;
+    const list = byTable.get(table) ?? [];
+    list.push(s.entity_id as string);
+    byTable.set(table, list);
+  }
+  const titleByKey = new Map<string, string>();
+  await Promise.all(
+    Array.from(byTable.entries()).map(async ([table, ids]) => {
+      const titleCol = table === "boards" ? "name" : "title";
+      const { data } = await admin
+        .from(table)
+        .select(`id, ${titleCol}`)
+        .in("id", ids);
+      (data ?? []).forEach((row) => {
+        const r = row as Record<string, unknown>;
+        titleByKey.set(
+          `${table}:${r.id as string}`,
+          (r[titleCol] as string) ?? "Untitled",
+        );
+      });
+    }),
+  );
+  const shares = shareRows.map((s) => ({
+    id: s.id as string,
+    workspace_id: s.workspace_id as string,
+    entity_type: s.entity_type as string,
+    entity_id: s.entity_id as string,
+    entity_title:
+      titleByKey.get(
+        `${tableMap[s.entity_type as string] ?? ""}:${s.entity_id as string}`,
+      ) ?? "Untitled",
+    permission: s.permission as string,
+    expires_at: (s.expires_at as string | null) ?? null,
+    is_active: !!s.is_active,
+    created_at: s.created_at as string,
+  }));
 
   return {
     profile,
@@ -334,5 +391,6 @@ export async function getUserDetail(userId: string) {
     logs: logs ?? [],
     feedback: feedback ?? [],
     timers: timers ?? [],
+    shares,
   };
 }
