@@ -52,9 +52,9 @@ const PERMISSION_OPTIONS: {
   label: string;
   description: string;
 }[] = [
-  { value: "view", label: "View", description: "Can view content" },
-  { value: "comment", label: "Comment", description: "Can view and comment" },
-  { value: "edit", label: "Edit", description: "Can view, comment, and edit" },
+  { value: "view", label: "View", description: "Read-only preview" },
+  { value: "comment", label: "Comment", description: "Workspace members get comment access in-app" },
+  { value: "edit", label: "Edit", description: "Workspace members get full edit access in-app" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -214,7 +214,7 @@ export function ShareDialog({
                 Share &ldquo;{entityTitle}&rdquo;
               </Dialog.Title>
               <Dialog.Description className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
-                Create and manage share links for this {entityType}.
+                Anyone with the link can view this {entityType} — they&apos;ll need a free Trackify account to open it.
               </Dialog.Description>
             </div>
             <Dialog.Close asChild>

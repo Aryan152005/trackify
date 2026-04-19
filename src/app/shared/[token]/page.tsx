@@ -124,9 +124,9 @@ function SharedPageContent({ entity, entityType }: { entity: Record<string, unkn
               {entity.description as string}
             </p>
           )}
-          {!!entity.hours && (
+          {!!entity.hours_worked && (
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              Hours logged: {entity.hours as number}
+              Hours logged: {entity.hours_worked as number}
             </p>
           )}
           {!!entity.date && (

@@ -299,3 +299,100 @@ Run in order in Supabase SQL Editor:
 | 015 | `015_advanced_tasks.sql` | task_dependencies, task_automations |
 | 016 | `016_connectors.sql` | External integrations/webhooks |
 | 017 | `017_feedback_whitelist_requests.sql` | whitelist_requests, user_feedback |
+| 018 | `018_system_logs.sql` | `system_logs` table for admin observability |
+| 019 | `019_push_subscriptions.sql` | `push_subscriptions` for web-push / PWA |
+| 020 | `020_reminders_notified_at.sql` | `reminders.notified_at` for cron idempotency |
+| 021 | `021_fts_search.sql` | Full-text search across work_entries |
+| 022 | `022_avatars_bucket.sql` | Storage bucket for user avatars |
+| 023 | `023_timer_session_title.sql` | `timer_sessions.title` |
+| 024 | `024_challenges.sql` | `challenges` table with day-level progress |
+| 025 | `025_realtime_members.sql` | Realtime broadcast for workspace_members |
+| 026 | `026_realtime_entities.sql` | Realtime broadcast for content tables |
+| 027 | `027_tighten_invitation_rls.sql` | Stricter RLS on workspace invitations |
+| 028 | `028_entry_hours_and_tag_fts.sql` | `hours_worked` column + tag text in FTS |
+| 029 | `029_user_last_activity.sql` | `last_activity_at` column + `touch_user_activity()` RPC |
+| 030 | `030_backfill_ist_reminders.sql` | One-shot backfill for wrongly-stored task-auto reminders |
+| 031 | `031_reminder_push_retry.sql` | `push_attempts` with 3-strike ceiling |
+| 032 | `032_yjs_collab_state.sql` | `yjs_state BYTEA` on drawings/mindmaps/pages |
+| 033 | `033_workspace_shared_write.sql` | Workspace-shared UPDATE/DELETE with privacy check |
+| 034 | `034_user_preferences.sql` | `user_profiles.preferences` JSONB |
+| 035 | `035_sharing_security_fixes.sql` | `shared_links.entity_type` CHECK includes `'challenge'` |
+
+---
+
+## Post-028 Architecture Additions
+
+### IST datetime pipeline
+
+All reminder / task-due / calendar event times are **interpreted and displayed in IST** regardless of the runtime timezone (Vercel is UTC). Centralised in `src/lib/utils/datetime.ts`:
+
+```mermaid
+sequenceDiagram
+    participant User as User (any TZ)
+    participant Form as Browser form
+    participant DB as Postgres (UTC)
+    participant UI as Server-rendered UI
+
+    User->>Form: picks 9:00 AM in datetime-local
+    Form->>Form: istLocalToUtcISO(str) → appends +05:30, calls toISOString
+    Form->>DB: INSERT "2026-04-20T03:30:00Z"
+    UI->>DB: SELECT reminder_time
+    DB-->>UI: "2026-04-20T03:30:00Z"
+    UI->>UI: formatIST(iso) → "Apr 20, 2026 at 9:00 AM"
+    UI->>User: "Apr 20, 2026 at 9:00 AM IST"
+```
+
+The original bug was `new Date("2026-04-20T09:00:00").toISOString()` on Vercel — it interpreted the string as UTC local and stored 09:00Z instead of 03:30Z, firing reminders at 14:30 IST. Migration 030 backfills affected rows.
+
+### Yjs CRDT transport
+
+Real-time collab on drawings / mindmaps / notes without a new server:
+
+```mermaid
+graph LR
+    A[Editor A] -->|Y.Doc update| P[SupabaseYjsProvider]
+    P -->|broadcast msg| SB[(Supabase Realtime)]
+    SB -->|broadcast msg| P2[SupabaseYjsProvider]
+    P2 -->|Y.applyUpdate| B[Editor B]
+    P -.->|debounced snapshot| DB[(yjs_state BYTEA)]
+```
+
+- Binary state persisted to `yjs_state BYTEA` on each entity table (migration 032).
+- On provider mount: load snapshot → apply → broadcast `sync-request` → peers reply with full state. From then on only deltas are transmitted.
+- Canvas cursors use **scene coordinates** (stored in Yjs awareness) so pan/zoom is per-user.
+
+### Workspace-shared write model
+
+Migration 033 relaxed UPDATE/DELETE on tasks / work_entries / boards / pages / mindmaps / drawings to `editor+`-with-privacy-check:
+
+```sql
+USING (
+  public.user_has_workspace_access(workspace_id, 'editor')
+  AND (is_private = false OR owner = auth.uid())
+)
+```
+
+Server actions dropped `.eq("user_id", auth.uid())` forced filters for these tables. Reminders kept their per-user scope so push notifications stay private.
+
+### Link sharing
+
+`/api/collaboration/share/[token]` uses the service-role client for public reads, with a **privacy gate**: refuses to return `is_private = true` entities even when a valid share token exists (defense-in-depth; `createSharedLink` also refuses creation against private items). Response is **field-filtered** per `entity_type` — the API returns exactly what the read-only preview renders, nothing more.
+
+Audit + revoke at `/workspace/shared-links` — surfaces every active link in the workspace with creator, entity, permission, expiry; workspace admins can revoke any link, members can revoke links they created (RLS in migration 013).
+
+### User preferences
+
+`user_profiles.preferences` JSONB (migration 034) holds: `landingPage`, `listDensity`, `accentColor`, `fabVisible`, `defaultTaskView`, `defaultCalendarView`. Read via `getUserPreferences()` (always returns full object with defaults filled in), written via `updateUserPreferences(patch)` (RMW-merge so partial updates don't wipe unknown keys).
+
+Client provider in `src/lib/preferences/provider.tsx` applies density (`html[data-density]`) and accent (`--accent` CSS var) on first paint via `PreferencesBootstrap`.
+
+### Smart mindmap
+
+`src/lib/smart-mindmap/graph.ts` builds a cross-entity graph per page load:
+
+- **Nodes**: tasks + reminders + entries + pages (capped at 50, proportional per kind).
+- **Edges**: parent-child (from `tasks.parent_task_id`), task-reminder (from `reminders.entity_type/entity_id`), same-board (from `tasks.board_id`/`column_id`), shared-tag (from `entry_tags`), keyword similarity (TF-IDF over user's own corpus, cap 0.12), same-day cross-kind.
+- **Suggestions** ranked by priority: `batch-complete-overdue` (100) → `complete-overdue-reminder` (90) → `set-due-from-reminder` (70) → `create-reminder-from-task` (60) → `create-entry-for-task` (40) → `archive-stale-task` (20).
+- **Overview** computed once: task/reminder/entry/page totals, overdue counts, due-this-week, stale-task count.
+
+Rendered by `src/components/mindmaps/smart-mindmap.tsx` with ELK layered layout, color-by kind/urgency/status/priority, edge-reason tooltip, date-window filter, title search. Embedded collapsibly at the top of `/mindmaps`.

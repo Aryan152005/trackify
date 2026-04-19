@@ -5,7 +5,7 @@ import { useWorkspace, useRequireRole } from "@/lib/workspace/hooks";
 import { updateWorkspace } from "@/lib/workspace/actions";
 import { AnimatedPage } from "@/components/ui/animated-layout";
 import Link from "next/link";
-import { Settings, Users, ArrowLeft, Puzzle } from "lucide-react";
+import { Settings, Users, ArrowLeft, Puzzle, Link2 } from "lucide-react";
 
 export default function WorkspaceSettingsPage() {
   const { workspace } = useWorkspace();
@@ -126,6 +126,21 @@ export default function WorkspaceSettingsPage() {
               </div>
               <div className="text-xs text-zinc-500">
                 Slack, GitHub, webhooks & more
+              </div>
+            </div>
+          </Link>
+
+          <Link
+            href="/workspace/shared-links"
+            className="flex items-center gap-3 rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm hover:border-indigo-300 transition dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-indigo-700"
+          >
+            <Link2 className="h-5 w-5 text-indigo-500" />
+            <div>
+              <div className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                Share links
+              </div>
+              <div className="text-xs text-zinc-500">
+                Audit &amp; revoke every active share link
               </div>
             </div>
           </Link>
