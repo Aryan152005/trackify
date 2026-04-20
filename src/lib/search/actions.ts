@@ -362,95 +362,44 @@ export async function getRecentItems(
 // ---------------------------------------------------------------------------
 export async function getQuickActions(): Promise<QuickAction[]> {
   return [
-    // Create actions
-    {
-      id: "create-page",
-      label: "Create new page",
-      icon: "FilePlus",
-      shortcut: "N",
-      action: "/notes/new",
-      category: "create",
-    },
-    {
-      id: "create-task",
-      label: "Create new task",
-      icon: "ListPlus",
-      shortcut: "T",
-      action: "/tasks?new=1",
-      category: "create",
-    },
-    {
-      id: "create-board",
-      label: "Create new board",
-      icon: "LayoutDashboard",
-      action: "/boards?new=1",
-      category: "create",
-    },
-    {
-      id: "create-entry",
-      label: "Log work entry",
-      icon: "PenLine",
-      action: "/entries/new",
-      category: "create",
-    },
-    {
-      id: "create-mindmap",
-      label: "Create mind map",
-      icon: "GitBranch",
-      action: "/mindmaps/new",
-      category: "create",
-    },
-    // Navigate actions
-    {
-      id: "nav-dashboard",
-      label: "Go to Dashboard",
-      icon: "LayoutGrid",
-      shortcut: "D",
-      action: "/dashboard",
-      category: "navigate",
-    },
-    {
-      id: "nav-tasks",
-      label: "Go to Tasks",
-      icon: "CheckSquare",
-      action: "/tasks",
-      category: "navigate",
-    },
-    {
-      id: "nav-boards",
-      label: "Go to Boards",
-      icon: "Columns",
-      action: "/boards",
-      category: "navigate",
-    },
-    {
-      id: "nav-notes",
-      label: "Go to Notes",
-      icon: "FileText",
-      action: "/notes",
-      category: "navigate",
-    },
-    {
-      id: "nav-calendar",
-      label: "Go to Calendar",
-      icon: "CalendarDays",
-      action: "/calendar",
-      category: "navigate",
-    },
-    {
-      id: "nav-analytics",
-      label: "Go to Analytics",
-      icon: "BarChart3",
-      action: "/analytics",
-      category: "navigate",
-    },
-    // Settings
-    {
-      id: "settings-workspace",
-      label: "Workspace settings",
-      icon: "Settings",
-      action: "/workspace",
-      category: "settings",
-    },
+    // ── Create ────────────────────────────────────────────
+    { id: "create-task", label: "New task", icon: "ListPlus", shortcut: "C T", action: "/tasks/new", category: "create" },
+    { id: "create-page", label: "New note", icon: "FilePlus", shortcut: "C N", action: "/notes/new", category: "create" },
+    { id: "create-entry", label: "Log work entry", icon: "PenLine", shortcut: "C E", action: "/entries/new", category: "create" },
+    { id: "create-reminder", label: "New reminder", icon: "Bell", shortcut: "C R", action: "/reminders/new", category: "create" },
+    { id: "create-board", label: "New board", icon: "Columns", shortcut: "C B", action: "/boards/new", category: "create" },
+    { id: "create-mindmap", label: "New mind map", icon: "GitBranch", action: "/mindmaps?new=1", category: "create" },
+    { id: "create-drawing", label: "New drawing", icon: "PenLine", action: "/drawings?new=1", category: "create" },
+    { id: "create-challenge", label: "New challenge", icon: "GitBranch", action: "/challenges/new", category: "create" },
+
+    // ── Navigate (primary, high-frequency) ────────────────
+    { id: "nav-today", label: "Go to Today", icon: "CalendarDays", shortcut: "G T", action: "/today", category: "navigate" },
+    { id: "nav-inbox", label: "Go to Inbox", icon: "MessageSquare", shortcut: "G I", action: "/inbox", category: "navigate" },
+    { id: "nav-tasks", label: "Go to Tasks", icon: "CheckSquare", shortcut: "G K", action: "/tasks", category: "navigate" },
+    { id: "nav-notes", label: "Go to Notes", icon: "FileText", shortcut: "G N", action: "/notes", category: "navigate" },
+    { id: "nav-boards", label: "Go to Boards", icon: "Columns", shortcut: "G B", action: "/boards", category: "navigate" },
+    { id: "nav-dashboard", label: "Go to Dashboard", icon: "LayoutGrid", shortcut: "G D", action: "/dashboard", category: "navigate" },
+
+    // ── Navigate (secondary) ──────────────────────────────
+    { id: "nav-calendar", label: "Go to Calendar", icon: "CalendarDays", action: "/calendar", category: "navigate" },
+    { id: "nav-reminders", label: "Go to Reminders", icon: "Bell", action: "/reminders", category: "navigate" },
+    { id: "nav-mindmaps", label: "Go to Mind maps", icon: "GitBranch", action: "/mindmaps", category: "navigate" },
+    { id: "nav-drawings", label: "Go to Drawings", icon: "PenLine", action: "/drawings", category: "navigate" },
+    { id: "nav-challenges", label: "Go to Challenges", icon: "GitBranch", action: "/challenges", category: "navigate" },
+    { id: "nav-timeline", label: "Go to Timeline", icon: "Clock", action: "/timeline", category: "navigate" },
+    { id: "nav-analytics", label: "Go to Analytics", icon: "BarChart3", action: "/analytics", category: "navigate" },
+    { id: "nav-reports", label: "Go to Reports", icon: "FileText", action: "/reports", category: "navigate" },
+    { id: "nav-notifications", label: "Go to Notifications", icon: "Bell", action: "/notifications", category: "navigate" },
+    { id: "nav-mentions", label: "Go to Mentions", icon: "MessageSquare", action: "/mentions", category: "navigate" },
+    { id: "nav-personal", label: "Personal space", icon: "FileText", action: "/personal", category: "navigate" },
+    { id: "nav-workspace-members", label: "Team members", icon: "Settings", action: "/workspace/members", category: "navigate" },
+    { id: "nav-workspace-activity", label: "Workspace activity", icon: "Clock", action: "/workspace/activity", category: "navigate" },
+    { id: "nav-shared-links", label: "Shared links audit", icon: "Settings", action: "/workspace/shared-links", category: "navigate" },
+
+    // ── Settings ──────────────────────────────────────────
+    { id: "settings-preferences", label: "Preferences", icon: "Settings", shortcut: "G P", action: "/settings/preferences", category: "settings" },
+    { id: "settings-profile", label: "Edit profile", icon: "Settings", action: "/settings/profile", category: "settings" },
+    { id: "settings-workspace", label: "Workspace settings", icon: "Settings", action: "/workspace", category: "settings" },
+    { id: "settings-help", label: "Help & walkthrough", icon: "MessageSquare", shortcut: "?", action: "/help", category: "settings" },
   ];
 }

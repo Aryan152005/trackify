@@ -10,6 +10,7 @@ import { PushPromptBanner } from "@/components/push/push-prompt-banner";
 import { WelcomeTour } from "@/components/onboarding/welcome-tour";
 import { ActivityHeartbeat } from "@/components/activity/activity-heartbeat";
 import { GlobalCaptureFab } from "@/components/today/global-capture-fab";
+import { ShortcutsCheatsheet } from "@/components/search/shortcuts-cheatsheet";
 import { isCurrentUserAdmin } from "@/lib/admin/actions";
 import { PreferencesProvider } from "@/lib/preferences/provider";
 import { getUserPreferences } from "@/lib/preferences/actions";
@@ -42,6 +43,9 @@ export default async function MainLayout({
             <PageTransition>{children}</PageTransition>
           </main>
           {preferences.fabVisible && <GlobalCaptureFab />}
+          {/* `?` cheatsheet overlay + letter-chord navigation (G T, C N,
+              etc.). Mounted once globally so the listener is always on. */}
+          <ShortcutsCheatsheet />
         </PresenceProvider>
       </WorkspaceProvider>
     </PreferencesProvider>
