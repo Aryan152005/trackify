@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getTodaySnapshot } from "@/lib/today/actions";
+import { getHydratedTodayPlan } from "@/lib/today/plan-actions";
+import { PlanTodaySection } from "@/components/today/plan-today-section";
 import { formatIST, formatISTTime, istDateKey } from "@/lib/utils/datetime";
 import {
   Card,
@@ -34,7 +36,10 @@ export default async function TodayPage() {
     .single();
   if (!profile) redirect("/onboarding");
 
-  const snap = await getTodaySnapshot();
+  const [snap, hydratedPlan] = await Promise.all([
+    getTodaySnapshot(),
+    getHydratedTodayPlan().catch(() => ({ plan: null, tasks: [] })),
+  ]);
   const todayKey = istDateKey(new Date());
   const greeting = getGreeting();
 
@@ -101,6 +106,16 @@ export default async function TodayPage() {
           sub="Tracked today"
         />
       </div>
+
+      {/* ── Plan today — intentional daily list (Things 3 inspired) ──
+           State 1 (no plan): auto-opens the drawer the FIRST visit of
+           the IST day, then just renders a nudge card. State 2 (plan
+           exists): renders the picked list with click-to-complete. */}
+      <PlanTodaySection
+        plan={hydratedPlan.plan}
+        tasks={hydratedPlan.tasks}
+        autoOpen={!hydratedPlan.plan}
+      />
 
       {/* ── Hero row: primary capture + motivation side-by-side ───
            On desktop they balance each other; on mobile they stack. */}
