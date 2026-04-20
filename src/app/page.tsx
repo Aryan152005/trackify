@@ -35,15 +35,17 @@ export default function Home() {
         </div>
 
         <h1 className="text-3xl font-extrabold leading-tight tracking-tight text-zinc-900 sm:text-5xl md:text-6xl dark:text-zinc-50">
-          Plan. Track.{" "}
+          Daily work,{" "}
           <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-            Ship faster.
+            legible.
           </span>
         </h1>
 
         <p className="mt-4 max-w-2xl text-base leading-relaxed text-zinc-600 sm:mt-6 sm:text-lg dark:text-zinc-400">
-          Trackify brings your tasks, notes, boards, and analytics into one beautiful workspace.
-          Stop switching between apps — plan your work, track progress, and collaborate with your team, all in one place.
+          Trackify is a productivity workspace that treats tasks, notes, drawings,
+          and your daily ritual as one thing. Personal or team — with real-time collab,
+          a private lane inside every shared workspace, and nothing that feels like
+          it was bolted on.
         </p>
 
         <div className="mt-6 flex w-full flex-col gap-3 sm:mt-10 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-center sm:gap-4">
@@ -61,20 +63,53 @@ export default function Home() {
           </Link>
         </div>
 
-        {/* Feature pills */}
-        <div className="mt-8 grid w-full grid-cols-2 gap-3 sm:mt-16 sm:grid-cols-4">
+        {/* Differentiator grid — leads with what Trackify actually does
+            BETTER than the generic productivity apps, not a category
+            list of everyone-ships-these features. */}
+        <div className="mt-8 grid w-full grid-cols-1 gap-3 sm:mt-16 sm:grid-cols-2 lg:grid-cols-3">
           {[
-            { emoji: "✅", label: "Tasks & Boards" },
-            { emoji: "📝", label: "Smart Notes" },
-            { emoji: "📊", label: "Analytics" },
-            { emoji: "👥", label: "Team Collab" },
+            {
+              emoji: "🎨",
+              title: "Realtime drawings + mindmaps",
+              desc: "Excalidraw + Yjs CRDT. Peers see strokes land as they happen, durable across tab close.",
+            },
+            {
+              emoji: "🔒",
+              title: "Private lane inside shared workspaces",
+              desc: "Flip is_private on any task, note, board. Teammates can't see it even though you're in the same workspace.",
+            },
+            {
+              emoji: "🔗",
+              title: "Per-email share grants + delegation",
+              desc: "Invite non-members to a specific note with view or editor access. They can forward onwards. All audited.",
+            },
+            {
+              emoji: "📍",
+              title: "Daily + weekly rituals, not a dumping list",
+              desc: "Plan today (pick 3–5), Friday review, auto-computed shipped/slipped. Turns the tool into a practice.",
+            },
+            {
+              emoji: "🧠",
+              title: "Smart mindmap auto-built from your data",
+              desc: "TF-IDF + graph layout over tasks, notes, entries, challenges. Re-renders as your work grows.",
+            },
+            {
+              emoji: "⌨️",
+              title: "Keyboard-first power mode",
+              desc: "⌘K for everything, G-chord navigation, token-highlighting capture. Learn the grammar by typing.",
+            },
           ].map((f) => (
             <div
-              key={f.label}
-              className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white/80 px-4 py-3 text-sm font-medium text-zinc-700 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80 dark:text-zinc-300"
+              key={f.title}
+              className="rounded-xl border border-zinc-200 bg-white/80 p-4 text-left backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80"
             >
-              <span className="text-lg">{f.emoji}</span>
-              {f.label}
+              <div className="mb-1 text-2xl">{f.emoji}</div>
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                {f.title}
+              </h3>
+              <p className="mt-0.5 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+                {f.desc}
+              </p>
             </div>
           ))}
         </div>
