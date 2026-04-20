@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { quickCapture, deleteCaptured, renameCaptured } from "@/lib/today/actions";
 import { parseCapture, type ParsedKind } from "@/lib/today/parse";
+import { TokenHighlightInput } from "@/components/today/token-highlight-input";
 
 /**
  * Floating capture sheet — single entry point for creating a task, reminder,
@@ -203,17 +204,18 @@ export function GlobalCaptureFab() {
               }}
               className="mt-4 space-y-3"
             >
-              <input
-                type="text"
+              <TokenHighlightInput
                 value={value}
-                onChange={(e) => {
-                  setValue(e.target.value);
+                onChange={(next) => {
+                  setValue(next);
                   setOverride(null); // fresh text clears any prior override
                 }}
                 autoFocus
                 disabled={pending}
-                placeholder='e.g. "call supplier 3pm tomorrow"'
-                className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+                onEnter={submit}
+                placeholder='e.g. "call supplier 3pm tomorrow #work p1"'
+                className="w-full"
+                inputClassName="rounded-lg border border-zinc-300 bg-white px-3 py-2.5 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/30 dark:border-zinc-600 dark:bg-zinc-800"
               />
 
               {/* Live parse preview — shows as soon as the user types. */}

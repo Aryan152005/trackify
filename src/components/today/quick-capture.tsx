@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Bell, CheckCircle2, Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { quickCapture } from "@/lib/today/actions";
+import { TokenHighlightInput } from "@/components/today/token-highlight-input";
 
 /**
  * Single-input capture. Types into one box, backend decides whether it's a
@@ -55,14 +56,14 @@ export function QuickCapture() {
       }}
       className="flex items-center gap-2"
     >
-      <input
-        type="text"
+      <TokenHighlightInput
         value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder="What needs doing? (e.g. 'call supplier 3pm' or 'finish spec')"
+        onChange={setValue}
+        placeholder="What needs doing? (e.g. 'call supplier 3pm #work' or 'finish spec p1')"
         disabled={pending}
-        className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500"
-        autoComplete="off"
+        onEnter={submit}
+        className="flex-1"
+        inputClassName="rounded-lg border border-zinc-300 bg-white px-3 py-2.5 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/30 dark:border-zinc-600 dark:bg-zinc-800"
       />
       <Button type="submit" disabled={pending || !value.trim()}>
         {pending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />}
