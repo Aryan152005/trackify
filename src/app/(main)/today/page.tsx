@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getTodaySnapshot } from "@/lib/today/actions";
 import { getHydratedTodayPlan } from "@/lib/today/plan-actions";
 import { PlanTodaySection } from "@/components/today/plan-today-section";
+import { WeeklyReviewModal } from "@/components/today/weekly-review-modal";
 import { formatIST, formatISTTime, istDateKey } from "@/lib/utils/datetime";
 import {
   Card,
@@ -65,6 +66,10 @@ export default async function TodayPage() {
   });
 
   return (
+    <>
+      {/* Friday-afternoon review prompt — decides for itself whether to
+          show (window + not-already-done + not-skipped-recently). */}
+      <WeeklyReviewModal />
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title={`${greeting}, ${profile.name}`}
@@ -441,6 +446,7 @@ export default async function TodayPage() {
         <JumpLink href="/personal" label="Personal space" icon={<Lock className="h-4 w-4" />} />
       </div>
     </div>
+    </>
   );
 }
 
