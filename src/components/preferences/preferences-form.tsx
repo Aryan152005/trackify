@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, Loader2, Layout, Rows3, Palette, Plus, Kanban, CalendarDays } from "lucide-react";
+import { Check, Loader2, Layout, Rows3, Palette, Plus, Kanban, CalendarDays, Moon } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { updateUserPreferences } from "@/lib/preferences/actions";
 import { usePreferencesSetter } from "@/lib/preferences/provider";
@@ -215,6 +215,31 @@ export function PreferencesForm({ initial }: { initial: UserPreferences }) {
             options={[
               { value: "show", label: "Show", hint: "Always visible" },
               { value: "hide", label: "Hide", hint: "Keyboard-only (press C)" },
+            ] as const}
+          />
+        </CardContent>
+      </Card>
+
+      {/* ── Calm mode ────────────────────────────────────────── */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Moon className="h-4 w-4 text-indigo-500" />
+            Calm mode
+            {savingKey === "calmMode" && pending && <Loader2 className="ml-1 h-3.5 w-3.5 animate-spin text-zinc-400" />}
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Mutes saturation across stat tiles, gradient cards, and priority
+            chips — keeps the same accent colour, just less visually loud.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Segmented
+            value={prefs.calmMode ? "on" : "off"}
+            onChange={(v) => save("calmMode", v === "on")}
+            options={[
+              { value: "off", label: "Off", hint: "Full colour" },
+              { value: "on", label: "On", hint: "Muted palette" },
             ] as const}
           />
         </CardContent>

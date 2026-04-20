@@ -25,9 +25,11 @@ interface Props {
   /** When defined, shows a selection checkbox for bulk actions. */
   selected?: boolean;
   onToggleSelect?: (id: string) => void;
+  /** Completed timer sessions against this task. Rendered as "🍅 N" chip. */
+  pomodoroCount?: number;
 }
 
-export function TaskRow({ task, completed = false, selected, onToggleSelect }: Props) {
+export function TaskRow({ task, completed = false, selected, onToggleSelect, pomodoroCount = 0 }: Props) {
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState<null | "toggle" | "save" | "delete">(null);
   const [optimisticDone, setOptimisticDone] = useState(completed);
@@ -235,6 +237,15 @@ export function TaskRow({ task, completed = false, selected, onToggleSelect }: P
             <div className="mt-1.5">
               <TaskLabels labels={initialLabels} onChange={() => {}} readOnly small />
             </div>
+          )}
+          {pomodoroCount > 0 && (
+            <span
+              title={`${pomodoroCount} focus session${pomodoroCount === 1 ? "" : "s"} logged against this task`}
+              className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-orange-50 px-1.5 py-0.5 text-[10px] font-medium text-orange-700 dark:bg-orange-950/30 dark:text-orange-300"
+            >
+              <span aria-hidden>🍅</span>
+              <span>{pomodoroCount}</span>
+            </span>
           )}
         </div>
 

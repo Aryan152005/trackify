@@ -16,7 +16,14 @@ function isoDateOnly(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
-export function TasksGroups({ tasks }: { tasks: Task[] }) {
+export function TasksGroups({
+  tasks,
+  pomodoroCounts = {},
+}: {
+  tasks: Task[];
+  /** Per-task completed timer-session counts for the 🍅 chip. */
+  pomodoroCounts?: Record<string, number>;
+}) {
   const router = useRouter();
   const workspaceId = useWorkspaceId();
   const [search, setSearch] = useState("");
@@ -179,6 +186,7 @@ export function TasksGroups({ tasks }: { tasks: Task[] }) {
                     completed={b.key === "completed"}
                     selected={selected.has(task.id)}
                     onToggleSelect={toggleSelect}
+                    pomodoroCount={pomodoroCounts[task.id] ?? 0}
                   />
                 ))}
               </div>

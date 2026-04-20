@@ -9,6 +9,7 @@ import { TasksGroups } from "@/components/tasks/tasks-groups";
 import { Plus, CheckSquare } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SharedSection } from "@/components/collaboration/shared-section";
+import { getPomodoroCounts } from "@/lib/timer/actions";
 import type { Task } from "@/lib/types/database";
 
 export default async function TasksPage({
@@ -52,6 +53,12 @@ export default async function TasksPage({
     ? await tasksQuery.eq("workspace_id", workspaceId)
     : await tasksQuery.eq("user_id", user.id);
 
+  // 🍅 chip data — one batch fetch for every visible task so each row
+  // doesn't do its own round-trip. Safe if empty (zero taskIds short-
+  // circuits inside getPomodoroCounts).
+  const taskIds = (tasks ?? []).map((t) => t.id as string);
+  const pomodoroCounts = await getPomodoroCounts(taskIds).catch(() => ({} as Record<string, number>));
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -84,7 +91,7 @@ export default async function TasksPage({
           secondaryHref="/boards"
         />
       ) : (
-        <TasksGroups tasks={tasks as Task[]} />
+        <TasksGroups tasks={tasks as Task[]} pomodoroCounts={pomodoroCounts} />
       )}
 
       <SharedSection entityType="task" />

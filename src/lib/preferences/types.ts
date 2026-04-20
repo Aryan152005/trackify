@@ -29,6 +29,13 @@ export interface UserPreferences {
   fabVisible: boolean;
   defaultTaskView: DefaultTaskView;
   defaultCalendarView: DefaultCalendarView;
+  /**
+   * "Calm mode" — orthogonal to accent colour, mutes saturation across
+   * stat tiles, gradient card tints, priority chips, and card-lift
+   * hover effects. Appeals to users overwhelmed by Trackify's default
+   * rainbow palette without forcing them to swap accents.
+   */
+  calmMode: boolean;
 }
 
 export const DEFAULT_PREFERENCES: UserPreferences = {
@@ -38,6 +45,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   fabVisible: true,
   defaultTaskView: "list",
   defaultCalendarView: "month",
+  calmMode: false,
 };
 
 /**

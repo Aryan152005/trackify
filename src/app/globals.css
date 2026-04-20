@@ -40,6 +40,25 @@ html[data-density="comfortable"] .density-row {
   padding-bottom: 0.5rem;
 }
 
+/*
+ * Calm mode — mutes the otherwise-vivid palette without changing the
+ * accent colour. Applied globally as a filter so every component (stat
+ * tiles, gradient cards, priority chips, badge bars) gets toned down
+ * in one pass. Users who love the default colours won't notice; users
+ * overwhelmed by indigo-plus-emerald-plus-amber-plus-rose can exhale.
+ *
+ * The saturate() filter stacks with dark-mode filters harmlessly. We
+ * bump grayscale slightly rather than 100% because the accent needs
+ * to stay recognisable.
+ */
+html[data-calm="true"] body {
+  filter: saturate(0.6) contrast(0.95);
+}
+html[data-calm="true"] .card-lift:hover {
+  transform: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
 html,
 body {
   background: var(--background);

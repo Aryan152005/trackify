@@ -52,3 +52,38 @@ export async function getTodayTimerTotal(): Promise<number> {
   if (error) throw new Error(error.message);
   return (data ?? []).reduce((sum, r) => sum + ((r.duration_seconds as number) ?? 0), 0);
 }
+
+/**
+ * Return a map taskId → count of completed timer sessions. Used on the
+ * tasks list to render "🍅 N" chips. Counts only sessions with a real
+ * ended_at (abandoned sessions don't count) and duration ≥ 5 min —
+ * shorter bursts are likely false starts. No workspace filter;
+ * timer_sessions is per-user by design.
+ */
+export async function getPomodoroCounts(
+  taskIds: string[],
+): Promise<Record<string, number>> {
+  if (taskIds.length === 0) return {};
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return {};
+
+  const { data, error } = await supabase
+    .from("timer_sessions")
+    .select("task_id, duration_seconds, ended_at")
+    .eq("user_id", user.id)
+    .in("task_id", taskIds)
+    .not("ended_at", "is", null)
+    .gte("duration_seconds", 5 * 60);
+  if (error) return {};
+
+  const counts: Record<string, number> = {};
+  for (const row of data ?? []) {
+    const id = row.task_id as string | null;
+    if (!id) continue;
+    counts[id] = (counts[id] ?? 0) + 1;
+  }
+  return counts;
+}

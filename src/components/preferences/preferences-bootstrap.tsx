@@ -13,10 +13,11 @@ export function PreferencesBootstrap({ prefs }: { prefs: UserPreferences }) {
   useEffect(() => {
     const html = document.documentElement;
     html.dataset.density = prefs.listDensity;
+    html.dataset.calm = prefs.calmMode ? "true" : "false";
     html.style.setProperty(
       "--accent",
       ACCENT_COLORS[prefs.accentColor]?.hex ?? ACCENT_COLORS.indigo.hex,
     );
-  }, [prefs.listDensity, prefs.accentColor]);
+  }, [prefs.listDensity, prefs.accentColor, prefs.calmMode]);
   return null;
 }
