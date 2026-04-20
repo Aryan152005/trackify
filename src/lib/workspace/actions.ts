@@ -75,6 +75,18 @@ export async function createPersonalWorkspace(userId: string, name: string) {
     role: "owner",
   });
 
+  // Pre-seed sample content so the new user doesn't land on a blank
+  // canvas. Idempotent — skips if the workspace already has a sample
+  // task. Failure is non-fatal (logged, swallowed) so a seeding bug
+  // can't prevent someone from actually signing up.
+  try {
+    const { seedWelcomeContent } = await import("@/lib/workspace/seed-welcome");
+    await seedWelcomeContent(workspace.id as string, userId);
+  } catch (err) {
+    // Non-fatal; user can still use the empty workspace.
+    console.warn("seedWelcomeContent failed:", err);
+  }
+
   return workspace;
 }
 
