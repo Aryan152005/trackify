@@ -22,7 +22,7 @@ async function fetchOwnedTask(taskId: string) {
   const { supabase, user } = await requireUser();
   const { data: task } = await supabase
     .from("tasks")
-    .select("id, user_id, workspace_id, title, status, is_private")
+    .select("id, user_id, workspace_id, title, status, is_private, estimate_minutes")
     .eq("id", taskId)
     .maybeSingle();
   if (!task) throw new Error("Task not found or you don't have access");
@@ -129,6 +129,7 @@ export async function updateTask(
     due_date?: string | null;
     due_time?: string | null;
     labels?: Label[];
+    estimate_minutes?: number | null;
   }
 ) {
   const { supabase, user, task } = await fetchOwnedTask(taskId);
@@ -148,6 +149,62 @@ export async function updateTask(
   revalidatePath(`/tasks/${taskId}`);
   revalidatePath("/today");
   revalidatePath("/mindmaps");
+}
+
+/**
+ * Schedule a task onto the calendar as an event. Start time comes from
+ * the caller (UI picks a reasonable default — e.g. "next half-hour" or
+ * the task's due_date at 09:00). Duration comes from the task's
+ * estimate_minutes; if unset, defaults to 30 min. Returns the created
+ * event id so the UI can link to it.
+ *
+ * Motion's auto-scheduler is intentionally NOT replicated — this is a
+ * one-click, user-consented time-block, not an AI that moves your
+ * calendar on its own.
+ */
+export async function scheduleTaskOnCalendar(
+  taskId: string,
+  startIso: string,
+): Promise<{ event_id: string }> {
+  const { supabase, user, task } = await fetchOwnedTask(taskId);
+  void user;
+
+  const estimate = (task.estimate_minutes as number | null) ?? 30;
+  const start = new Date(startIso);
+  if (isNaN(start.getTime())) throw new Error("Invalid start time");
+  const end = new Date(start.getTime() + estimate * 60 * 1000);
+
+  const workspaceId = task.workspace_id as string | null;
+  if (!workspaceId) throw new Error("Task must belong to a workspace to be scheduled");
+
+  const { data: event, error } = await supabase
+    .from("calendar_events")
+    .insert({
+      workspace_id: workspaceId,
+      title: (task.title as string) ?? "Task",
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
+      all_day: false,
+      color: "#6366f1",
+      description: `Auto-scheduled from task. Estimated ${estimate} min.`,
+      created_by: user!.id,
+    })
+    .select("id")
+    .single();
+  if (error || !event) throw new Error(`Failed to schedule: ${error?.message ?? "unknown"}`);
+
+  await logActivity({
+    workspaceId,
+    action: "edited",
+    entityType: "task",
+    entityId: taskId,
+    entityTitle: (task.title as string) ?? "Task",
+  });
+
+  revalidatePath(`/tasks/${taskId}`);
+  revalidatePath("/calendar");
+  revalidatePath("/today");
+  return { event_id: event.id as string };
 }
 
 export async function deleteTask(taskId: string) {

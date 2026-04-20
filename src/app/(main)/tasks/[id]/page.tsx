@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { TaskActions } from "@/components/tasks/task-actions";
+import { TaskEstimateCard } from "@/components/tasks/task-estimate-card";
 import { TaskReminderButton } from "@/components/tasks/task-reminder-button";
 import { SubtaskList } from "@/components/tasks/subtask-list";
 import { TaskDependencies } from "@/components/tasks/task-dependencies";
@@ -123,6 +124,7 @@ export default async function TaskDetailPage({ params }: { params: { id: string 
 
         <div className="space-y-4">
           <TaskActions task={task} />
+          <TaskEstimateCard task={task} />
           <TaskReminderButton
             task={{
               id: task.id,

@@ -60,6 +60,7 @@ export default async function TodayPage() {
     assigned_to: null,
     parent_task_id: null,
     labels: [],
+    estimate_minutes: null,
     completed_at: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),

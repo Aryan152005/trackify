@@ -80,6 +80,8 @@ export interface Task {
   assigned_to: string | null;
   parent_task_id: string | null;
   labels: import("./board").Label[];
+  /** Optional time-box in minutes — when set, surfaces the "Schedule it" button. */
+  estimate_minutes: number | null;
   created_at: string;
   updated_at: string;
 }
