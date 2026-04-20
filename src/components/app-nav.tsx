@@ -18,6 +18,7 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import dynamic from "next/dynamic";
 import {
   LayoutDashboard,
+  Inbox,
   FileText,
   CheckSquare,
   Columns3,
@@ -54,6 +55,7 @@ const CommandPalette = dynamic(
 // Everything else is still one click away under "Explore".
 const primaryNav = [
   { href: "/today", label: "Today", icon: Sun },
+  { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/notes", label: "Notes", icon: StickyNote },
 ];
