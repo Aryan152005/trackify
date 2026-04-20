@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspaceId } from "@/lib/workspace/hooks";
-import { updatePageContent, updatePageTitle, updatePageMeta, createPage, createPageFromTemplate } from "@/lib/notes/actions";
+import { updatePageContent, updatePageTitle, updatePageMeta, createPage, createPageFromTemplate, extractChecklistAsTasks } from "@/lib/notes/actions";
 import { toast } from "sonner";
 import { AnimatedPage } from "@/components/ui/animated-layout";
 import { PageHeader } from "@/components/notes/page-header";
@@ -15,7 +15,7 @@ import type { Page } from "@/lib/types/page";
 import { CollaborationToolbar } from "@/components/collaboration/collaboration-toolbar";
 import { NoteHistoryPanel } from "@/components/notes/note-history-panel";
 import { Button } from "@/components/ui/button";
-import { History } from "lucide-react";
+import { History, ListChecks } from "lucide-react";
 import { PrivateToggle } from "@/components/personal/private-toggle";
 
 const BlockEditor = dynamic(
@@ -311,6 +311,37 @@ export default function PageEditorPage() {
             >
               <History className="mr-1.5 h-3.5 w-3.5" />
               History
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                // Auto-save runs on a 1.5s debounce, so if the user
+                // just typed boxes they may need to wait. The server
+                // reads the latest persisted content; anything still
+                // in the debounce window will be missed on this run.
+                try {
+                  const { created } = await extractChecklistAsTasks(pageId);
+                  if (created === 0) {
+                    toast.info("No unchecked boxes found in this note.", {
+                      description: "If you just added boxes, wait a second for auto-save and try again.",
+                    });
+                  } else {
+                    toast.success(
+                      `Created ${created} task${created === 1 ? "" : "s"} — check /tasks.`,
+                      {
+                        description: "Tip: delete the checkbox lines here once the tasks are in your list.",
+                      },
+                    );
+                  }
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "Couldn't extract checklist");
+                }
+              }}
+              title="Create tasks from unchecked checkboxes in this note"
+            >
+              <ListChecks className="mr-1.5 h-3.5 w-3.5" />
+              Extract tasks
             </Button>
           </div>
           <NoteHistoryPanel

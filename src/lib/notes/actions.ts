@@ -289,3 +289,95 @@ export async function duplicatePage(pageId: string): Promise<Page> {
   if (error) throw new Error(`Failed to duplicate page: ${error.message}`);
   return data as Page;
 }
+
+// ---------------------------------------------------------------------------
+// Checklist → tasks — Notion-style block extraction (scoped, one-way)
+// ---------------------------------------------------------------------------
+
+interface BlockNoteBlock {
+  id?: string;
+  type: string;
+  props?: Record<string, unknown>;
+  content?: Array<{ type: string; text?: string; styles?: Record<string, unknown> }> | string;
+  children?: BlockNoteBlock[];
+}
+
+/** Flatten nested BlockNote blocks into a single array, preserving order. */
+function flattenBlocks(blocks: BlockNoteBlock[]): BlockNoteBlock[] {
+  const out: BlockNoteBlock[] = [];
+  for (const b of blocks ?? []) {
+    out.push(b);
+    if (b.children && b.children.length > 0) {
+      out.push(...flattenBlocks(b.children));
+    }
+  }
+  return out;
+}
+
+/** Concatenate text from a BlockNote block's inline-content array. */
+function blockPlainText(b: BlockNoteBlock): string {
+  if (!b.content) return "";
+  if (typeof b.content === "string") return b.content;
+  return b.content
+    .filter((c) => c.type === "text" && typeof c.text === "string")
+    .map((c) => c.text as string)
+    .join("")
+    .trim();
+}
+
+/**
+ * Walk a note's BlockNote content, find every unchecked `checkListItem`
+ * block, and create a Task for each in the note's workspace. Returns
+ * the count created so the UI can toast "3 tasks created from checklist".
+ *
+ * One-way only — we do NOT mark the block as checked when the task is
+ * done later. That would require an embedding layer (two-way sync =
+ * the real L-effort block-unify). This covers the 80% need: "I jotted
+ * a bunch of checkboxes in a meeting note and want them on /tasks".
+ *
+ * Idempotency: we only extract UNCHECKED items. Re-running on the same
+ * note after the user checks a box would still extract the remaining
+ * unchecked items — duplicates if the user hasn't cleared the extracted
+ * ones. The UI button warns about this.
+ */
+export async function extractChecklistAsTasks(
+  pageId: string,
+): Promise<{ created: number }> {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  const { data: page, error: pageErr } = await supabase
+    .from("pages")
+    .select("id, workspace_id, title, content, is_private")
+    .eq("id", pageId)
+    .single();
+  if (pageErr || !page) throw new Error("Page not found or no access");
+
+  const content = (page.content as BlockNoteBlock[] | null) ?? [];
+  const flat = flattenBlocks(content);
+  const unchecked = flat.filter(
+    (b) => b.type === "checkListItem" && !(b.props as { checked?: boolean } | undefined)?.checked,
+  );
+  if (unchecked.length === 0) return { created: 0 };
+
+  const rows = unchecked
+    .map((b) => blockPlainText(b))
+    .filter((t) => t.length > 0)
+    .map((title) => ({
+      user_id: user.id,
+      workspace_id: page.workspace_id as string,
+      title: title.slice(0, 500),
+      description: `Extracted from note: ${(page.title as string) ?? "Untitled"}`,
+      status: "pending" as const,
+      priority: "medium" as const,
+      is_private: (page.is_private as boolean | null) ?? false,
+    }));
+  if (rows.length === 0) return { created: 0 };
+
+  const { error: insertErr } = await supabase.from("tasks").insert(rows);
+  if (insertErr) throw new Error(`Failed to create tasks: ${insertErr.message}`);
+
+  revalidatePath("/tasks");
+  revalidatePath("/today");
+  revalidatePath(`/notes/${pageId}`);
+  return { created: rows.length };
+}
